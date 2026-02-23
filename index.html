@@ -204,6 +204,9 @@
     <div class="loading-spinner"></div>
     <div class="loading-text">Researching your query...</div>
     <div class="loading-sub" id="loadingSub">Analyzing natural stone projects and stakeholders</div>
+    <div style="max-width:300px;margin:16px auto 0;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;">
+        <div id="loadingBar" style="width:0%;height:100%;background:var(--accent);border-radius:2px;transition:width 0.5s;"></div>
+    </div>
 </div>
 
 <!-- DATABASE VIEW -->
@@ -354,27 +357,69 @@ async function doSearch() {
     document.getElementById('resultsArea').style.display = 'none';
     document.getElementById('dbView').classList.remove('active');
     document.getElementById('loadingState').style.display = 'block';
-    document.getElementById('loadingSub').textContent = `Searching: "${query}"`;
+    document.getElementById('loadingSub').textContent = `Batch 1 of 4 — Searching: "${query}"`;
     document.getElementById('btnDatabase').classList.remove('active');
 
     // Save search to history
     await dbAdd('searches', { query, timestamp: new Date().toISOString() });
     await updateDbCount();
 
-    try {
-        const results = await callAI(query, key);
-        currentResults = results;
-        renderResults(results, query);
-    } catch(err) {
-        document.getElementById('loadingState').style.display = 'none';
-        document.getElementById('resultsArea').style.display = 'block';
-        document.getElementById('resultsTitle').textContent = 'Error';
-        document.getElementById('resultsContainer').innerHTML = `
-            <div class="result-card" style="border-left-color:var(--red);">
-                <h4 style="color:var(--red);">Search Error</h4>
-                <p class="result-description">${err.message}. Check your API key in settings.</p>
-            </div>
-        `;
+    const TOTAL_BATCHES = 4;
+    let allResults = [];
+    let errored = false;
+
+    for (let batch = 1; batch <= TOTAL_BATCHES; batch++) {
+        document.getElementById('loadingSub').textContent = `Batch ${batch} of ${TOTAL_BATCHES} — ${allResults.length} results so far...`;
+        document.getElementById('loadingBar').style.width = ((batch - 1) / TOTAL_BATCHES * 100) + '%';
+
+        try {
+            // Build a batch-specific prompt so each round returns different results
+            let batchQuery = query;
+            if (batch === 1) {
+                batchQuery = query + ' — Focus on the FIRST set of 10 major projects and firms.';
+            } else if (batch === 2) {
+                batchQuery = query + ' — Give me the NEXT 10 results. Do NOT repeat these already found: ' + allResults.slice(0, 10).map(r => r.name).join(', ') + '. Focus on different projects, smaller or newer firms, and additional contacts.';
+            } else if (batch === 3) {
+                batchQuery = query + ' — Give me 10 MORE results. Do NOT repeat any of these: ' + allResults.map(r => r.name).join(', ') + '. Focus on stone suppliers, specialist contractors, emerging projects, and niche designers.';
+            } else {
+                batchQuery = query + ' — Final batch: give me 10 additional unique results. Do NOT repeat any of these: ' + allResults.map(r => r.name).join(', ') + '. Include market insights, alternative stone types, lesser-known firms, and upcoming pipeline projects.';
+            }
+
+            const results = await callAI(batchQuery, key);
+            // Deduplicate by name
+            const existingNames = new Set(allResults.map(r => (r.name||'').toLowerCase()));
+            const newResults = results.filter(r => !existingNames.has((r.name||'').toLowerCase()));
+            allResults = allResults.concat(newResults);
+
+            // Show progressive results after each batch
+            currentResults = allResults;
+            renderResults(allResults, query);
+            document.getElementById('resultsArea').style.display = 'block';
+        } catch(err) {
+            if (batch === 1) {
+                // First batch failed — show error
+                errored = true;
+                document.getElementById('loadingState').style.display = 'none';
+                document.getElementById('resultsArea').style.display = 'block';
+                document.getElementById('resultsTitle').textContent = 'Error';
+                document.getElementById('resultsContainer').innerHTML = `
+                    <div class="result-card" style="border-left-color:var(--red);">
+                        <h4 style="color:var(--red);">Search Error</h4>
+                        <p class="result-description">${err.message}. Check your API key in settings.</p>
+                    </div>
+                `;
+                break;
+            }
+            // Later batch failed — just stop, we have some results
+            console.warn(`Batch ${batch} failed:`, err.message);
+            break;
+        }
+    }
+
+    document.getElementById('loadingState').style.display = 'none';
+    if (!errored) {
+        currentResults = allResults;
+        renderResults(allResults, query);
     }
 }
 
@@ -416,13 +461,16 @@ ALWAYS return a JSON object with this exact structure:
 }
 
 IMPORTANT RULES:
-- Return 8-15 results per query
-- For emails, use the company's actual email domain and known email format (e.g., first.last@company.com). Research real email patterns.
+- Return EXACTLY 10 results per query
+- Keep each description to 1 short sentence (under 20 words)
+- For emails, use the company's actual email domain and known format (e.g., first.last@company.com)
 - Include REAL projects, companies, and people — not fabricated ones
 - Mix result types where relevant (projects + stakeholders + stone info)
 - Focus on high-end, luxury, and premium projects that use natural stone
-- Include specific stone types (Italian Carrara marble, African granite, Indonesian sandstone, etc.)
-- Return ONLY valid JSON, no markdown or explanation outside the JSON`;
+- Include specific stone types (Italian Carrara marble, African granite, etc.)
+- Return ONLY valid JSON, no markdown or explanation outside the JSON
+- CRITICAL: Keep the response compact. Short descriptions. No long text.
+- Only include fields that have actual values. Omit empty fields entirely.`;
 
     let body, url, headers;
 
@@ -436,7 +484,7 @@ IMPORTANT RULES:
         };
         body = JSON.stringify({
             model: model.startsWith('claude') ? model : 'claude-sonnet-4-5-20250514',
-            max_tokens: 4096,
+            max_tokens: 8192,
             system: systemPrompt,
             messages: [{ role: 'user', content: query }]
         });
@@ -448,7 +496,7 @@ IMPORTANT RULES:
         };
         body = JSON.stringify({
             model: model.startsWith('gpt') ? model : 'gpt-4o-mini',
-            max_tokens: 4096,
+            max_tokens: 8192,
             response_format: { type: 'json_object' },
             messages: [
                 { role: 'system', content: systemPrompt },
@@ -471,13 +519,46 @@ IMPORTANT RULES:
         text = data.choices[0].message.content;
     }
 
-    // Parse JSON from response (handle markdown wrapping)
+    // Parse JSON from response (handle markdown wrapping + truncation)
     let cleaned = text;
     if (cleaned.includes('```json')) cleaned = cleaned.split('```json')[1].split('```')[0];
     else if (cleaned.includes('```')) cleaned = cleaned.split('```')[1].split('```')[0];
+    cleaned = cleaned.trim();
 
-    const parsed = JSON.parse(cleaned.trim());
-    return parsed.results || [];
+    // Try direct parse first
+    try {
+        const parsed = JSON.parse(cleaned);
+        return parsed.results || [];
+    } catch(e) {
+        // Response was truncated — try to recover partial results
+        console.warn('JSON truncated, attempting recovery...');
+
+        // Find the last complete object by looking for the last "},"
+        let recoverable = cleaned;
+        const lastComplete = recoverable.lastIndexOf('},');
+        if (lastComplete > 0) {
+            recoverable = recoverable.substring(0, lastComplete + 1) + ']}';
+            // Make sure it starts with {"results":
+            if (!recoverable.startsWith('{"results"')) {
+                recoverable = '{"results":' + recoverable.substring(recoverable.indexOf('['));
+            }
+            try {
+                const parsed = JSON.parse(recoverable);
+                return parsed.results || [];
+            } catch(e2) {
+                // Last resort: extract individual objects with regex
+                const objects = [];
+                const regex = /\{[^{}]*"name"\s*:\s*"[^"]+?"[^{}]*\}/g;
+                let match;
+                while ((match = regex.exec(cleaned)) !== null) {
+                    try { objects.push(JSON.parse(match[0])); } catch(e3) {}
+                }
+                if (objects.length > 0) return objects;
+                throw new Error('Could not parse AI response. Try a more specific query.');
+            }
+        }
+        throw new Error('Could not parse AI response. Try a more specific query.');
+    }
 }
 
 // ============================================================

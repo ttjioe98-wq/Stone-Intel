@@ -163,7 +163,9 @@
     <div class="header-actions">
         <span class="db-count" id="dbCount">Database: 0 results</span>
         <button class="btn-sm" id="btnDatabase" onclick="toggleDB()">My Database</button>
+        <button class="btn-sm" onclick="importDbJson()" title="Load a saved database JSON file">&#8593; Import DB</button>
         <button class="btn-sm" id="btnSettings" onclick="openSettings()">&#9881; API Key</button>
+        <input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="handleImport(event)">
     </div>
 </div>
 
@@ -645,10 +647,78 @@ async function saveAllToDb() {
         await dbAdd(store, r);
     }
     await updateDbCount();
+    // Auto-download the full DB as JSON for backup / repo sync
+    await downloadDbJson();
     const btn = document.querySelector('[onclick="saveAllToDb()"]');
-    btn.textContent = '✓ Saved to DB';
+    btn.textContent = '✓ Saved + JSON Downloaded';
     btn.classList.add('active');
-    setTimeout(() => { btn.textContent = '☆ Save All to DB'; btn.classList.remove('active'); }, 2000);
+    setTimeout(() => { btn.textContent = '☆ Save All to DB'; btn.classList.remove('active'); }, 3000);
+}
+
+// Download entire DB as a single JSON file (for uploading to repo)
+async function downloadDbJson() {
+    const projects = await dbGetAll('projects');
+    const stakeholders = await dbGetAll('stakeholders');
+    const searches = await dbGetAll('searches');
+    const dbExport = {
+        exportedAt: new Date().toISOString(),
+        projects,
+        stakeholders,
+        searches
+    };
+    const blob = new Blob([JSON.stringify(dbExport, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'saved-db.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
+// Import a saved DB JSON file
+function importDbJson() {
+    document.getElementById('importFileInput').click();
+}
+
+async function handleImport(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        let count = 0;
+        if (data.projects) {
+            for (const p of data.projects) {
+                const clean = { ...p };
+                delete clean.id; // Remove old IDs so IndexedDB auto-generates new ones
+                delete clean.savedAt;
+                await dbAdd('projects', clean);
+                count++;
+            }
+        }
+        if (data.stakeholders) {
+            for (const s of data.stakeholders) {
+                const clean = { ...s };
+                delete clean.id;
+                delete clean.savedAt;
+                await dbAdd('stakeholders', clean);
+                count++;
+            }
+        }
+        if (data.searches) {
+            for (const h of data.searches) {
+                const clean = { ...h };
+                delete clean.id;
+                delete clean.savedAt;
+                await dbAdd('searches', clean);
+            }
+        }
+        await updateDbCount();
+        alert(`Imported ${count} records successfully!`);
+        // Reset file input
+        event.target.value = '';
+    } catch(e) {
+        alert('Error importing file: ' + e.message);
+    }
 }
 
 // ============================================================
@@ -771,25 +841,58 @@ async function init() {
     loadSettings();
     await updateDbCount();
 
-    // Load seed data from data/ folder if exists and DB is empty
+    // Load saved DB from repo if browser DB is empty
     try {
         const projects = await dbGetAll('projects');
         if (projects.length === 0) {
-            const resp = await fetch('data/projects.json');
-            if (resp.ok) {
-                const seedProjects = await resp.json();
-                for (const p of seedProjects) {
-                    await dbAdd('projects', { ...p, type: 'project', category: p.type });
-                }
-                const resp2 = await fetch('data/stakeholders.json');
-                if (resp2.ok) {
-                    const seedStakeholders = await resp2.json();
-                    for (const s of seedStakeholders) {
-                        await dbAdd('stakeholders', { ...s, type: 'stakeholder', name: s.company, email: s.bdEmail });
+            // First try: load the synced saved-db.json (your accumulated data)
+            let loaded = false;
+            try {
+                const resp = await fetch('data/saved-db.json');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (data.projects) {
+                        for (const p of data.projects) {
+                            const clean = { ...p }; delete clean.id;
+                            await dbAdd('projects', clean);
+                        }
                     }
+                    if (data.stakeholders) {
+                        for (const s of data.stakeholders) {
+                            const clean = { ...s }; delete clean.id;
+                            await dbAdd('stakeholders', clean);
+                        }
+                    }
+                    if (data.searches) {
+                        for (const h of data.searches) {
+                            const clean = { ...h }; delete clean.id;
+                            await dbAdd('searches', clean);
+                        }
+                    }
+                    loaded = true;
                 }
-                await updateDbCount();
+            } catch(e) {}
+
+            // Fallback: load original seed data
+            if (!loaded) {
+                try {
+                    const resp = await fetch('data/projects.json');
+                    if (resp.ok) {
+                        const seedProjects = await resp.json();
+                        for (const p of seedProjects) {
+                            await dbAdd('projects', { ...p, type: 'project', category: p.type });
+                        }
+                    }
+                    const resp2 = await fetch('data/stakeholders.json');
+                    if (resp2.ok) {
+                        const seedStakeholders = await resp2.json();
+                        for (const s of seedStakeholders) {
+                            await dbAdd('stakeholders', { ...s, type: 'stakeholder', name: s.company, email: s.bdEmail });
+                        }
+                    }
+                } catch(e) {}
             }
+            await updateDbCount();
         }
     } catch(e) { /* No seed data, that's fine */ }
 }

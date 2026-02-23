@@ -428,37 +428,42 @@ async function callAI(query, key) {
     const provider = localStorage.getItem('si_provider') || 'anthropic';
     const model = localStorage.getItem('si_model') || 'claude-sonnet-4-5-20250514';
 
-    const systemPrompt = `You are a natural stone project research engine. Return JSON only.
+    const systemPrompt = `Natural stone project research engine. JSON only.
 
-Return: {"r":[...array of objects...]}
+Return: {"r":[...]}
 
-Each object has ONLY these short keys (omit if empty):
-- t: type ("p"=project,"s"=stakeholder,"st"=stone,"m"=market)
-- n: name
+ONLY return projects and stakeholders. NO market analysis, NO stone category overviews.
+
+Each object keys (omit if empty):
+- t: "p" (project) or "s" (stakeholder) ONLY
+- n: project or company name
 - co: country
 - ci: city
-- cat: category
-- sta: status (Under Construction/Under Tender/Planned)
-- v: value
-- d: description (MAX 15 words)
-- sn: stone types
-- ar: architect
-- ae: architect email (use real firstname.lastname@company.com format)
-- ds: designer
-- de: designer email
-- cn: contractor
+- cat: project type OR role (Architect/Designer/Contractor/Supplier)
+- sta: Under Construction / Under Tender / Planned
+- v: est. value
+- d: 1 sentence max 12 words
+- sn: stone types needed
+- ar: architect firm
+- ae: architect work email (firstname.lastname@company.com)
+- ds: interior designer firm
+- de: designer work email
+- cn: contractor/developer
 - ce: contractor email
-- ct: contact person name
-- ti: title/role
-- em: their work email
+- ct: key contact person
+- ti: their role
+- em: their individual work email
 - hq: HQ location
 - cp: completion year
+- sp: stone suppliers already awarded/competing (comma separated company names)
+- se: those suppliers' emails (comma separated)
 
 Rules:
-- Return EXACTLY 8 results
-- Use REAL data only
-- Emails must use real company domains with firstname.lastname format
-- Descriptions MAX 15 words
+- EXACTLY 8 results
+- ONLY real projects and real companies
+- Every result MUST have at least one email
+- Emails: real company domain, firstname.lastname format
+- NO market overviews, NO stone category summaries
 - JSON only, no markdown`;
 
     let body, url, headers;
@@ -543,10 +548,13 @@ Rules:
     const parsed = tryParse(cleaned);
     if (!parsed) throw new Error('Could not parse AI response. Try a shorter or more specific query.');
 
-    // Map short keys to full keys
+    // Map short keys to full keys, filter out market/stone overview fluff
     const raw = parsed.r || parsed.results || [];
     const typeMap = { p: 'project', s: 'stakeholder', st: 'stone', m: 'market' };
-    return raw.map(r => ({
+    return raw.filter(r => {
+        const type = r.t || r.type || '';
+        return type !== 'm' && type !== 'market' && type !== 'st' && type !== 'stone';
+    }).map(r => ({
         type: typeMap[r.t] || r.t || r.type || 'project',
         name: r.n || r.name || '',
         country: r.co || r.country || '',
@@ -569,6 +577,8 @@ Rules:
         linkedin: r.li || r.linkedin || '',
         hq: r.hq || '',
         completion: r.cp || r.completion || '',
+        stoneSuppliers: r.sp || r.stoneSuppliers || '',
+        supplierEmails: r.se || r.supplierEmails || '',
     }));
 }
 
@@ -676,12 +686,15 @@ async function renderDbTab(tab) {
 
     if (tab === 'projects') {
         container.innerHTML = `<div style="overflow-x:auto;"><table class="db-table">
-            <thead><tr><th>Name</th><th>Country</th><th>City</th><th>Type</th><th>Status</th><th>Value</th><th>Architect</th><th>Arch. Email</th><th>Designer</th><th>Des. Email</th><th>Stone</th><th>Saved</th></tr></thead>
+            <thead><tr><th>Name</th><th>Country</th><th>City</th><th>Type</th><th>Status</th><th>Value</th><th>Architect</th><th>Arch. Email</th><th>Designer</th><th>Des. Email</th><th>Stone Types</th><th style="background:rgba(201,169,110,0.2);color:var(--accent);">Stone Suppliers Involved</th><th style="background:rgba(201,169,110,0.2);color:var(--accent);">Supplier Emails</th><th>Saved</th></tr></thead>
             <tbody>${items.map(i => `<tr>
                 <td>${i.name||''}</td><td>${i.country||''}</td><td>${i.city||''}</td><td>${i.category||''}</td><td>${i.status||''}</td><td>${i.value||''}</td>
                 <td>${i.architect||''}</td><td>${i.architectEmail ? '<a href="mailto:'+i.architectEmail+'">'+i.architectEmail+'</a>' : ''}</td>
                 <td>${i.designer||''}</td><td>${i.designerEmail ? '<a href="mailto:'+i.designerEmail+'">'+i.designerEmail+'</a>' : ''}</td>
-                <td>${(i.stoneTypes||'').substring(0,30)}</td><td>${(i.savedAt||'').substring(0,10)}</td>
+                <td>${(i.stoneTypes||'').substring(0,40)}</td>
+                <td style="color:var(--accent);">${i.stoneSuppliers||''}</td>
+                <td>${(i.supplierEmails||'').split(',').map(e => e.trim()).filter(Boolean).map(e => '<a href="mailto:'+e+'">'+e+'</a>').join(', ')}</td>
+                <td>${(i.savedAt||'').substring(0,10)}</td>
             </tr>`).join('')}</tbody></table></div>`;
     } else if (tab === 'stakeholders') {
         container.innerHTML = `<div style="overflow-x:auto;"><table class="db-table">
@@ -716,8 +729,8 @@ async function clearDb() {
 // ============================================================
 function exportResults() {
     if (!currentResults.length) return;
-    const headers = ['Name','Country','City','Type','Category','Status','Value','Architect','Architect Email','Designer','Designer Email','Contractor','Contractor Email','Contact','Title','Email','Stone Types','Stone Applications','HQ','Completion','Description'];
-    const rows = currentResults.map(r => [r.name,r.country,r.city,r.type,r.category,r.status,r.value,r.architect,r.architectEmail,r.designer,r.designerEmail,r.contractor,r.contractorEmail,r.contact,r.title,r.email,r.stoneTypes,r.stoneApplications,r.hq,r.completion,r.description]);
+    const headers = ['Name','Country','City','Type','Category','Status','Value','Architect','Architect Email','Designer','Designer Email','Contractor','Contractor Email','Contact','Title','Email','Stone Types','Stone Suppliers Involved','Supplier Emails','HQ','Completion','Description'];
+    const rows = currentResults.map(r => [r.name,r.country,r.city,r.type,r.category,r.status,r.value,r.architect,r.architectEmail,r.designer,r.designerEmail,r.contractor,r.contractorEmail,r.contact,r.title,r.email,r.stoneTypes,r.stoneSuppliers,r.supplierEmails,r.hq,r.completion,r.description]);
     downloadCSV(headers, rows, 'stoneintel_results.csv');
 }
 
@@ -725,8 +738,8 @@ async function exportDb() {
     const projects = await dbGetAll('projects');
     const stakeholders = await dbGetAll('stakeholders');
     const all = [...projects, ...stakeholders];
-    const headers = ['Name','Country','City','Type','Category','Status','Value','Architect','Architect Email','Designer','Designer Email','Contractor','Contact','Title','Email','Stone Types','HQ','Saved'];
-    const rows = all.map(r => [r.name,r.country,r.city,r.type,r.category,r.status,r.value,r.architect,r.architectEmail,r.designer,r.designerEmail,r.contractor,r.contact,r.title,r.email,r.stoneTypes,r.hq,r.savedAt]);
+    const headers = ['Name','Country','City','Type','Category','Status','Value','Architect','Architect Email','Designer','Designer Email','Contractor','Contact','Title','Email','Stone Types','Stone Suppliers Involved','Supplier Emails','HQ','Saved'];
+    const rows = all.map(r => [r.name,r.country,r.city,r.type,r.category,r.status,r.value,r.architect,r.architectEmail,r.designer,r.designerEmail,r.contractor,r.contact,r.title,r.email,r.stoneTypes,r.stoneSuppliers,r.supplierEmails,r.hq,r.savedAt]);
     downloadCSV(headers, rows, 'stoneintel_database.csv');
 }
 

@@ -375,14 +375,15 @@ async function doSearch() {
         try {
             // Build a batch-specific prompt so each round returns different results
             let batchQuery = query;
+            const skip = allResults.map(r => r.name).join(', ');
             if (batch === 1) {
-                batchQuery = query + ' — Focus on the FIRST set of 10 major projects and firms.';
+                batchQuery = query + ' — Top 8 major results.';
             } else if (batch === 2) {
-                batchQuery = query + ' — Give me the NEXT 10 results. Do NOT repeat these already found: ' + allResults.slice(0, 10).map(r => r.name).join(', ') + '. Focus on different projects, smaller or newer firms, and additional contacts.';
+                batchQuery = query + ' — Next 8 results. SKIP: ' + skip + '. Different/smaller firms.';
             } else if (batch === 3) {
-                batchQuery = query + ' — Give me 10 MORE results. Do NOT repeat any of these: ' + allResults.map(r => r.name).join(', ') + '. Focus on stone suppliers, specialist contractors, emerging projects, and niche designers.';
+                batchQuery = query + ' — 8 more results. SKIP: ' + skip + '. Suppliers, contractors, niche designers.';
             } else {
-                batchQuery = query + ' — Final batch: give me 10 additional unique results. Do NOT repeat any of these: ' + allResults.map(r => r.name).join(', ') + '. Include market insights, alternative stone types, lesser-known firms, and upcoming pipeline projects.';
+                batchQuery = query + ' — Final 8 unique results. SKIP: ' + skip + '. Market data, emerging projects, alternative firms.';
             }
 
             const results = await callAI(batchQuery, key);
@@ -427,50 +428,38 @@ async function callAI(query, key) {
     const provider = localStorage.getItem('si_provider') || 'anthropic';
     const model = localStorage.getItem('si_model') || 'claude-sonnet-4-5-20250514';
 
-    const systemPrompt = `You are StoneIntel, a natural stone construction project research engine. Given a search query, return structured JSON results about high-end construction projects, architects, interior designers, contractors, stone suppliers, and market data.
+    const systemPrompt = `You are a natural stone project research engine. Return JSON only.
 
-ALWAYS return a JSON object with this exact structure:
-{
-  "results": [
-    {
-      "type": "project" | "stakeholder" | "stone" | "market",
-      "name": "Name of project/company/stone/country",
-      "country": "Country",
-      "city": "City or region",
-      "category": "For stakeholders: Architect/Interior Designer/Contractor/Developer/Stone Supplier. For projects: project type like Ultra-Luxury Hotel. For stones: stone category. For markets: Market Outlook",
-      "status": "For projects: Under Construction/Under Tender/Planned. Otherwise empty string",
-      "value": "Estimated project value if applicable",
-      "description": "2-3 sentence description with key details",
-      "stoneTypes": "Natural stone types involved (marble, granite, travertine, etc.)",
-      "stoneApplications": "Where stone is used: lobbies, facades, bathrooms, etc.",
-      "architect": "Architect firm name if applicable",
-      "architectEmail": "Individual work email of a key architect (firstname.lastname@domain.com format based on the company's known email format)",
-      "designer": "Interior designer firm if applicable",
-      "designerEmail": "Individual work email of a key designer",
-      "contractor": "Main contractor or developer",
-      "contractorEmail": "Email for contractor",
-      "contact": "Key contact person name",
-      "title": "Their job title",
-      "email": "Their individual professional work email (not info@ or generic)",
-      "linkedin": "Company LinkedIn URL if known",
-      "hq": "Headquarters location",
-      "completion": "Expected completion year/date if applicable"
-    }
-  ],
-  "summary": "Brief 1-2 sentence summary of what was found"
-}
+Return: {"r":[...array of objects...]}
 
-IMPORTANT RULES:
-- Return EXACTLY 10 results per query
-- Keep each description to 1 short sentence (under 20 words)
-- For emails, use the company's actual email domain and known format (e.g., first.last@company.com)
-- Include REAL projects, companies, and people — not fabricated ones
-- Mix result types where relevant (projects + stakeholders + stone info)
-- Focus on high-end, luxury, and premium projects that use natural stone
-- Include specific stone types (Italian Carrara marble, African granite, etc.)
-- Return ONLY valid JSON, no markdown or explanation outside the JSON
-- CRITICAL: Keep the response compact. Short descriptions. No long text.
-- Only include fields that have actual values. Omit empty fields entirely.`;
+Each object has ONLY these short keys (omit if empty):
+- t: type ("p"=project,"s"=stakeholder,"st"=stone,"m"=market)
+- n: name
+- co: country
+- ci: city
+- cat: category
+- sta: status (Under Construction/Under Tender/Planned)
+- v: value
+- d: description (MAX 15 words)
+- sn: stone types
+- ar: architect
+- ae: architect email (use real firstname.lastname@company.com format)
+- ds: designer
+- de: designer email
+- cn: contractor
+- ce: contractor email
+- ct: contact person name
+- ti: title/role
+- em: their work email
+- hq: HQ location
+- cp: completion year
+
+Rules:
+- Return EXACTLY 8 results
+- Use REAL data only
+- Emails must use real company domains with firstname.lastname format
+- Descriptions MAX 15 words
+- JSON only, no markdown`;
 
     let body, url, headers;
 
@@ -525,40 +514,62 @@ IMPORTANT RULES:
     else if (cleaned.includes('```')) cleaned = cleaned.split('```')[1].split('```')[0];
     cleaned = cleaned.trim();
 
-    // Try direct parse first
-    try {
-        const parsed = JSON.parse(cleaned);
-        return parsed.results || [];
-    } catch(e) {
-        // Response was truncated — try to recover partial results
-        console.warn('JSON truncated, attempting recovery...');
-
-        // Find the last complete object by looking for the last "},"
-        let recoverable = cleaned;
-        const lastComplete = recoverable.lastIndexOf('},');
-        if (lastComplete > 0) {
-            recoverable = recoverable.substring(0, lastComplete + 1) + ']}';
-            // Make sure it starts with {"results":
-            if (!recoverable.startsWith('{"results"')) {
-                recoverable = '{"results":' + recoverable.substring(recoverable.indexOf('['));
-            }
-            try {
-                const parsed = JSON.parse(recoverable);
-                return parsed.results || [];
-            } catch(e2) {
-                // Last resort: extract individual objects with regex
-                const objects = [];
-                const regex = /\{[^{}]*"name"\s*:\s*"[^"]+?"[^{}]*\}/g;
-                let match;
-                while ((match = regex.exec(cleaned)) !== null) {
-                    try { objects.push(JSON.parse(match[0])); } catch(e3) {}
-                }
-                if (objects.length > 0) return objects;
-                throw new Error('Could not parse AI response. Try a more specific query.');
+    // Try to repair truncated JSON
+    function tryParse(str) {
+        // Direct try
+        try { return JSON.parse(str); } catch(e) {}
+        // Try closing off truncated array/object
+        const fixes = [']}', '"}]}', '"}]}'];
+        for (const fix of fixes) {
+            // Find last complete object
+            const lastBrace = str.lastIndexOf('},');
+            if (lastBrace > 0) {
+                const attempt = str.substring(0, lastBrace + 1) + ']}';
+                try { return JSON.parse(attempt); } catch(e) {}
             }
         }
-        throw new Error('Could not parse AI response. Try a more specific query.');
+        // Try wrapping
+        const arrStart = str.indexOf('[');
+        if (arrStart >= 0) {
+            const lastBrace = str.lastIndexOf('},');
+            if (lastBrace > 0) {
+                const attempt = '{"r":' + str.substring(arrStart, lastBrace + 1) + ']}';
+                try { return JSON.parse(attempt); } catch(e) {}
+            }
+        }
+        return null;
     }
+
+    const parsed = tryParse(cleaned);
+    if (!parsed) throw new Error('Could not parse AI response. Try a shorter or more specific query.');
+
+    // Map short keys to full keys
+    const raw = parsed.r || parsed.results || [];
+    const typeMap = { p: 'project', s: 'stakeholder', st: 'stone', m: 'market' };
+    return raw.map(r => ({
+        type: typeMap[r.t] || r.t || r.type || 'project',
+        name: r.n || r.name || '',
+        country: r.co || r.country || '',
+        city: r.ci || r.city || '',
+        category: r.cat || r.category || '',
+        status: r.sta || r.status || '',
+        value: r.v || r.value || '',
+        description: r.d || r.description || '',
+        stoneTypes: r.sn || r.stoneTypes || '',
+        stoneApplications: r.sa || r.stoneApplications || '',
+        architect: r.ar || r.architect || '',
+        architectEmail: r.ae || r.architectEmail || '',
+        designer: r.ds || r.designer || '',
+        designerEmail: r.de || r.designerEmail || '',
+        contractor: r.cn || r.contractor || '',
+        contractorEmail: r.ce || r.contractorEmail || '',
+        contact: r.ct || r.contact || '',
+        title: r.ti || r.title || '',
+        email: r.em || r.email || '',
+        linkedin: r.li || r.linkedin || '',
+        hq: r.hq || '',
+        completion: r.cp || r.completion || '',
+    }));
 }
 
 // ============================================================

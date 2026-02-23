@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StoneIntel — Natural Stone Project Search Engine</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #08080c;
+            --surface: #111118;
+            --surface2: #1a1a24;
+            --surface3: #222230;
+            --border: #2a2a3a;
+            --border2: #3a3a4a;
+            --text: #eaeaf0;
+            --text2: #9898a8;
+            --text3: #68687a;
+            --accent: #c9a96e;
+            --accent2: #a88a4e;
+            --accent-glow: rgba(201,169,110,0.15);
+            --green: #4ade80;
+            --yellow: #facc15;
+            --blue: #60a5fa;
+            --red: #f87171;
+            --purple: #a78bfa;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+        /* ========== HEADER ========== */
+        .header { display: flex; align-items: center; justify-content: space-between; padding: 16px 32px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 100; }
+        .logo { display: flex; align-items: center; gap: 10px; }
+        .logo-diamond { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; transform: rotate(0deg); }
+        .logo h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
+        .logo h1 span { color: var(--accent); }
+        .header-actions { display: flex; gap: 8px; align-items: center; }
+        .btn-sm { padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--surface2); color: var(--text2); transition: all 0.2s; }
+        .btn-sm:hover { color: var(--text); border-color: var(--border2); }
+        .btn-sm.active { color: var(--accent); border-color: var(--accent); background: var(--accent-glow); }
+        .db-count { font-size: 11px; color: var(--text3); }
+
+        /* ========== HERO / SEARCH ========== */
+        .hero { padding: 60px 32px 40px; text-align: center; max-width: 900px; margin: 0 auto; }
+        .hero.compact { padding: 20px 32px 16px; }
+        .hero h2 { font-size: 36px; font-weight: 800; letter-spacing: -1px; margin-bottom: 8px; line-height: 1.2; }
+        .hero h2 span { background: linear-gradient(135deg, var(--accent), #e8cc8a); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .hero.compact h2 { display: none; }
+        .hero p { color: var(--text2); font-size: 15px; margin-bottom: 28px; }
+        .hero.compact p { display: none; }
+
+        .search-container { position: relative; max-width: 720px; margin: 0 auto; }
+        .search-input { width: 100%; padding: 16px 56px 16px 20px; font-size: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; color: var(--text); outline: none; transition: all 0.3s; font-family: 'Inter', sans-serif; }
+        .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .search-input::placeholder { color: var(--text3); }
+        .search-btn { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 42px; height: 42px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border: none; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+        .search-btn:hover { transform: translateY(-50%) scale(1.05); }
+        .search-btn svg { width: 20px; height: 20px; }
+
+        .search-tags { display: flex; gap: 8px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+        .search-tag { padding: 5px 14px; border-radius: 20px; font-size: 12px; color: var(--text2); background: var(--surface2); border: 1px solid var(--border); cursor: pointer; transition: all 0.2s; }
+        .search-tag:hover { color: var(--accent); border-color: var(--accent); }
+
+        /* ========== RESULTS ========== */
+        .results-area { max-width: 1100px; margin: 0 auto; padding: 0 32px 60px; }
+        .results-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .results-header h3 { font-size: 14px; color: var(--text2); font-weight: 500; }
+        .results-actions { display: flex; gap: 8px; }
+
+        /* Loading state */
+        .loading { text-align: center; padding: 60px 20px; }
+        .loading-spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { color: var(--text2); font-size: 14px; }
+        .loading-sub { color: var(--text3); font-size: 12px; margin-top: 4px; }
+
+        /* Result cards */
+        .result-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 12px; transition: border-color 0.2s; cursor: default; }
+        .result-card:hover { border-color: var(--border2); }
+        .result-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+        .result-card h4 { font-size: 17px; font-weight: 600; line-height: 1.3; }
+        .result-badges { display: flex; gap: 6px; flex-shrink: 0; margin-left: 12px; }
+        .badge { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+        .badge-country { background: rgba(96,165,250,0.15); color: var(--blue); }
+        .badge-status { background: rgba(74,222,128,0.15); color: var(--green); }
+        .badge-type { background: rgba(167,139,250,0.15); color: var(--purple); }
+        .badge-stone { background: rgba(201,169,110,0.15); color: var(--accent); }
+
+        .result-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin-bottom: 12px; }
+        .meta-item { font-size: 13px; }
+        .meta-item .ml { color: var(--text3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; }
+        .meta-item .mv { color: var(--text); margin-top: 2px; }
+        .meta-item a { color: var(--accent); text-decoration: none; }
+        .meta-item a:hover { text-decoration: underline; }
+
+        .result-description { font-size: 13px; color: var(--text2); line-height: 1.6; border-top: 1px solid var(--border); padding-top: 10px; margin-top: 4px; }
+
+        /* Stakeholder result */
+        .result-card.stakeholder { border-left: 3px solid var(--purple); }
+        .result-card.project { border-left: 3px solid var(--accent); }
+        .result-card.stone { border-left: 3px solid var(--yellow); }
+        .result-card.market { border-left: 3px solid var(--blue); }
+
+        /* ========== SAVED DB VIEW ========== */
+        .db-view { max-width: 1100px; margin: 0 auto; padding: 20px 32px 60px; display: none; }
+        .db-view.active { display: block; }
+        .db-tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+        .db-tab { padding: 10px 20px; font-size: 13px; font-weight: 500; color: var(--text2); cursor: pointer; border-bottom: 2px solid transparent; }
+        .db-tab:hover { color: var(--text); }
+        .db-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .db-tab .cnt { background: var(--surface2); padding: 1px 7px; border-radius: 10px; font-size: 10px; margin-left: 4px; }
+
+        .db-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .db-table th { padding: 10px 14px; text-align: left; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text3); background: var(--surface2); white-space: nowrap; border-bottom: 1px solid var(--border); }
+        .db-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; max-width: 250px; overflow: hidden; text-overflow: ellipsis; }
+        .db-table tr:hover td { background: rgba(201,169,110,0.03); }
+        .db-table a { color: var(--accent); text-decoration: none; }
+
+        /* ========== SETTINGS MODAL ========== */
+        .settings-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 300; backdrop-filter: blur(4px); }
+        .settings-overlay.active { display: flex; align-items: center; justify-content: center; }
+        .settings-modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; width: 480px; max-width: 90%; padding: 28px; }
+        .settings-modal h3 { font-size: 18px; margin-bottom: 16px; }
+        .settings-modal label { font-size: 12px; color: var(--text2); display: block; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
+        .settings-modal input, .settings-modal select { width: 100%; padding: 10px 14px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px; font-family: 'Inter', sans-serif; outline: none; margin-bottom: 16px; }
+        .settings-modal input:focus { border-color: var(--accent); }
+        .settings-modal .note { font-size: 11px; color: var(--text3); margin-top: -12px; margin-bottom: 16px; }
+        .settings-btns { display: flex; gap: 8px; justify-content: flex-end; }
+        .btn { padding: 8px 20px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); transition: all 0.2s; font-family: 'Inter', sans-serif; }
+        .btn-primary { background: var(--accent); color: #000; border-color: var(--accent); }
+        .btn-primary:hover { background: var(--accent2); }
+        .btn-ghost { background: transparent; color: var(--text2); }
+
+        /* ========== EMPTY STATE ========== */
+        .empty-state { text-align: center; padding: 80px 20px; }
+        .empty-state svg { width: 64px; height: 64px; color: var(--text3); margin-bottom: 16px; }
+        .empty-state h3 { font-size: 18px; color: var(--text2); margin-bottom: 8px; }
+        .empty-state p { font-size: 14px; color: var(--text3); max-width: 400px; margin: 0 auto; }
+
+        /* ========== RESPONSIVE ========== */
+        @media (max-width: 768px) {
+            .header { padding: 12px 16px; }
+            .hero { padding: 32px 16px 24px; }
+            .hero h2 { font-size: 24px; }
+            .results-area, .db-view { padding: 0 16px 40px; }
+            .result-meta { grid-template-columns: 1fr; }
+        }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+    <div class="logo">
+        <div class="logo-diamond">&#9670;</div>
+        <h1>Stone<span>Intel</span></h1>
+    </div>
+    <div class="header-actions">
+        <span class="db-count" id="dbCount">Database: 0 results</span>
+        <button class="btn-sm" id="btnDatabase" onclick="toggleDB()">My Database</button>
+        <button class="btn-sm" id="btnSettings" onclick="openSettings()">&#9881; API Key</button>
+    </div>
+</div>
+
+<!-- HERO / SEARCH -->
+<div class="hero" id="hero">
+    <h2>Natural Stone <span>Intelligence</span></h2>
+    <p>Search for high-end construction projects, architects, designers, stone types, and market data across any region. Powered by AI research.</p>
+    <div class="search-container">
+        <input type="text" class="search-input" id="searchInput" placeholder="e.g. marble hotel projects in Vietnam, luxury architects in Tokyo, granite suppliers Dubai..." autofocus>
+        <button class="search-btn" onclick="doSearch()" id="searchBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </button>
+    </div>
+    <div class="search-tags">
+        <span class="search-tag" onclick="quickSearch('luxury hotel projects under construction in Singapore 2025')">Luxury hotels Singapore</span>
+        <span class="search-tag" onclick="quickSearch('marble and granite architects in Bangkok Thailand')">Stone architects Bangkok</span>
+        <span class="search-tag" onclick="quickSearch('natural stone suppliers in Indonesia Bali')">Stone suppliers Bali</span>
+        <span class="search-tag" onclick="quickSearch('high end resort projects Malaysia Langkawi 2025 2026')">Resorts Malaysia</span>
+        <span class="search-tag" onclick="quickSearch('interior designers specializing in stone for luxury hotels Japan')">Designers Japan</span>
+        <span class="search-tag" onclick="quickSearch('airport terminal projects requiring natural stone Asia')">Airport projects Asia</span>
+    </div>
+</div>
+
+<!-- RESULTS -->
+<div class="results-area" id="resultsArea" style="display:none;">
+    <div class="results-header">
+        <h3 id="resultsTitle">Results</h3>
+        <div class="results-actions">
+            <button class="btn-sm" onclick="exportResults()">&#8595; Export CSV</button>
+            <button class="btn-sm" onclick="saveAllToDb()">&#9733; Save All to DB</button>
+        </div>
+    </div>
+    <div id="resultsContainer"></div>
+</div>
+
+<!-- LOADING -->
+<div class="loading" id="loadingState" style="display:none;">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Researching your query...</div>
+    <div class="loading-sub" id="loadingSub">Analyzing natural stone projects and stakeholders</div>
+</div>
+
+<!-- DATABASE VIEW -->
+<div class="db-view" id="dbView">
+    <div class="db-tabs">
+        <div class="db-tab active" data-dbtab="projects" onclick="switchDbTab('projects')">Projects <span class="cnt" id="dbCountProjects">0</span></div>
+        <div class="db-tab" data-dbtab="stakeholders" onclick="switchDbTab('stakeholders')">Stakeholders <span class="cnt" id="dbCountStakeholders">0</span></div>
+        <div class="db-tab" data-dbtab="searches" onclick="switchDbTab('searches')">Search History <span class="cnt" id="dbCountSearches">0</span></div>
+    </div>
+    <div class="results-actions" style="margin-bottom:12px;">
+        <button class="btn-sm" onclick="exportDb()">&#8595; Export All CSV</button>
+        <button class="btn-sm" onclick="clearDb()" style="color:var(--red);border-color:var(--red);">Clear Database</button>
+    </div>
+    <div id="dbContent"></div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="settings-overlay" id="settingsOverlay" onclick="closeSettings(event)">
+    <div class="settings-modal">
+        <h3>&#9881; API Configuration</h3>
+        <label>AI Provider</label>
+        <select id="apiProvider">
+            <option value="anthropic">Anthropic (Claude)</option>
+            <option value="openai">OpenAI (GPT)</option>
+        </select>
+        <label>API Key</label>
+        <input type="password" id="apiKey" placeholder="sk-ant-... or sk-...">
+        <p class="note">Your key is stored only in this browser. Never sent anywhere except the AI provider's API.</p>
+        <label>Default Model</label>
+        <select id="apiModel">
+            <option value="claude-sonnet-4-5-20250514">Claude Sonnet 4.5 (Fast)</option>
+            <option value="claude-opus-4-5-20251101">Claude Opus 4.5 (Best)</option>
+            <option value="gpt-4o">GPT-4o</option>
+            <option value="gpt-4o-mini">GPT-4o Mini (Cheapest)</option>
+        </select>
+        <div class="settings-btns">
+            <button class="btn btn-ghost" onclick="document.getElementById('settingsOverlay').classList.remove('active')">Cancel</button>
+            <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+let currentResults = [];
+let dbShowingTab = 'projects';
+
+// ============================================================
+// INDEXEDDB — persistent local database
+// ============================================================
+let db;
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open('StoneIntelDB', 2);
+        req.onupgradeneeded = (e) => {
+            const d = e.target.result;
+            if (!d.objectStoreNames.contains('projects')) d.createObjectStore('projects', { keyPath: 'id', autoIncrement: true });
+            if (!d.objectStoreNames.contains('stakeholders')) d.createObjectStore('stakeholders', { keyPath: 'id', autoIncrement: true });
+            if (!d.objectStoreNames.contains('searches')) d.createObjectStore('searches', { keyPath: 'id', autoIncrement: true });
+        };
+        req.onsuccess = (e) => { db = e.target.result; resolve(db); };
+        req.onerror = (e) => reject(e);
+    });
+}
+
+async function dbAdd(store, item) {
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).add({ ...item, savedAt: new Date().toISOString() });
+    return tx.complete;
+}
+
+async function dbGetAll(store) {
+    return new Promise((resolve) => {
+        const tx = db.transaction(store, 'readonly');
+        const req = tx.objectStore(store).getAll();
+        req.onsuccess = () => resolve(req.result);
+    });
+}
+
+async function dbClear(store) {
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).clear();
+}
+
+async function updateDbCount() {
+    const p = await dbGetAll('projects');
+    const s = await dbGetAll('stakeholders');
+    const h = await dbGetAll('searches');
+    const total = p.length + s.length;
+    document.getElementById('dbCount').textContent = `Database: ${total} records`;
+    document.getElementById('dbCountProjects').textContent = p.length;
+    document.getElementById('dbCountStakeholders').textContent = s.length;
+    document.getElementById('dbCountSearches').textContent = h.length;
+}
+
+// ============================================================
+// SETTINGS
+// ============================================================
+function openSettings() { document.getElementById('settingsOverlay').classList.add('active'); }
+function closeSettings(e) { if (e.target === document.getElementById('settingsOverlay')) document.getElementById('settingsOverlay').classList.remove('active'); }
+
+function saveSettings() {
+    const provider = document.getElementById('apiProvider').value;
+    const key = document.getElementById('apiKey').value;
+    const model = document.getElementById('apiModel').value;
+    if (key) {
+        localStorage.setItem('si_provider', provider);
+        localStorage.setItem('si_key', key);
+        localStorage.setItem('si_model', model);
+        document.getElementById('settingsOverlay').classList.remove('active');
+        document.getElementById('btnSettings').classList.add('active');
+        document.getElementById('btnSettings').textContent = '✓ API Key Set';
+    }
+}
+
+function loadSettings() {
+    const key = localStorage.getItem('si_key');
+    const provider = localStorage.getItem('si_provider') || 'anthropic';
+    const model = localStorage.getItem('si_model') || 'claude-sonnet-4-5-20250514';
+    if (key) {
+        document.getElementById('apiKey').value = key;
+        document.getElementById('apiProvider').value = provider;
+        document.getElementById('apiModel').value = model;
+        document.getElementById('btnSettings').classList.add('active');
+        document.getElementById('btnSettings').textContent = '✓ API Key';
+    }
+}
+
+// ============================================================
+// SEARCH
+// ============================================================
+function quickSearch(q) {
+    document.getElementById('searchInput').value = q;
+    doSearch();
+}
+
+async function doSearch() {
+    const query = document.getElementById('searchInput').value.trim();
+    if (!query) return;
+
+    const key = localStorage.getItem('si_key');
+    if (!key) { openSettings(); return; }
+
+    // Switch to search mode
+    document.getElementById('hero').classList.add('compact');
+    document.getElementById('resultsArea').style.display = 'none';
+    document.getElementById('dbView').classList.remove('active');
+    document.getElementById('loadingState').style.display = 'block';
+    document.getElementById('loadingSub').textContent = `Searching: "${query}"`;
+    document.getElementById('btnDatabase').classList.remove('active');
+
+    // Save search to history
+    await dbAdd('searches', { query, timestamp: new Date().toISOString() });
+    await updateDbCount();
+
+    try {
+        const results = await callAI(query, key);
+        currentResults = results;
+        renderResults(results, query);
+    } catch(err) {
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('resultsArea').style.display = 'block';
+        document.getElementById('resultsTitle').textContent = 'Error';
+        document.getElementById('resultsContainer').innerHTML = `
+            <div class="result-card" style="border-left-color:var(--red);">
+                <h4 style="color:var(--red);">Search Error</h4>
+                <p class="result-description">${err.message}. Check your API key in settings.</p>
+            </div>
+        `;
+    }
+}
+
+async function callAI(query, key) {
+    const provider = localStorage.getItem('si_provider') || 'anthropic';
+    const model = localStorage.getItem('si_model') || 'claude-sonnet-4-5-20250514';
+
+    const systemPrompt = `You are StoneIntel, a natural stone construction project research engine. Given a search query, return structured JSON results about high-end construction projects, architects, interior designers, contractors, stone suppliers, and market data.
+
+ALWAYS return a JSON object with this exact structure:
+{
+  "results": [
+    {
+      "type": "project" | "stakeholder" | "stone" | "market",
+      "name": "Name of project/company/stone/country",
+      "country": "Country",
+      "city": "City or region",
+      "category": "For stakeholders: Architect/Interior Designer/Contractor/Developer/Stone Supplier. For projects: project type like Ultra-Luxury Hotel. For stones: stone category. For markets: Market Outlook",
+      "status": "For projects: Under Construction/Under Tender/Planned. Otherwise empty string",
+      "value": "Estimated project value if applicable",
+      "description": "2-3 sentence description with key details",
+      "stoneTypes": "Natural stone types involved (marble, granite, travertine, etc.)",
+      "stoneApplications": "Where stone is used: lobbies, facades, bathrooms, etc.",
+      "architect": "Architect firm name if applicable",
+      "architectEmail": "Individual work email of a key architect (firstname.lastname@domain.com format based on the company's known email format)",
+      "designer": "Interior designer firm if applicable",
+      "designerEmail": "Individual work email of a key designer",
+      "contractor": "Main contractor or developer",
+      "contractorEmail": "Email for contractor",
+      "contact": "Key contact person name",
+      "title": "Their job title",
+      "email": "Their individual professional work email (not info@ or generic)",
+      "linkedin": "Company LinkedIn URL if known",
+      "hq": "Headquarters location",
+      "completion": "Expected completion year/date if applicable"
+    }
+  ],
+  "summary": "Brief 1-2 sentence summary of what was found"
+}
+
+IMPORTANT RULES:
+- Return 8-15 results per query
+- For emails, use the company's actual email domain and known email format (e.g., first.last@company.com). Research real email patterns.
+- Include REAL projects, companies, and people — not fabricated ones
+- Mix result types where relevant (projects + stakeholders + stone info)
+- Focus on high-end, luxury, and premium projects that use natural stone
+- Include specific stone types (Italian Carrara marble, African granite, Indonesian sandstone, etc.)
+- Return ONLY valid JSON, no markdown or explanation outside the JSON`;
+
+    let body, url, headers;
+
+    if (provider === 'anthropic') {
+        url = 'https://api.anthropic.com/v1/messages';
+        headers = {
+            'Content-Type': 'application/json',
+            'x-api-key': key,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true'
+        };
+        body = JSON.stringify({
+            model: model.startsWith('claude') ? model : 'claude-sonnet-4-5-20250514',
+            max_tokens: 4096,
+            system: systemPrompt,
+            messages: [{ role: 'user', content: query }]
+        });
+    } else {
+        url = 'https://api.openai.com/v1/chat/completions';
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${key}`
+        };
+        body = JSON.stringify({
+            model: model.startsWith('gpt') ? model : 'gpt-4o-mini',
+            max_tokens: 4096,
+            response_format: { type: 'json_object' },
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: query }
+            ]
+        });
+    }
+
+    const resp = await fetch(url, { method: 'POST', headers, body });
+    if (!resp.ok) {
+        const err = await resp.text();
+        throw new Error(`API Error (${resp.status}): ${err.substring(0, 200)}`);
+    }
+
+    const data = await resp.json();
+    let text;
+    if (provider === 'anthropic') {
+        text = data.content[0].text;
+    } else {
+        text = data.choices[0].message.content;
+    }
+
+    // Parse JSON from response (handle markdown wrapping)
+    let cleaned = text;
+    if (cleaned.includes('```json')) cleaned = cleaned.split('```json')[1].split('```')[0];
+    else if (cleaned.includes('```')) cleaned = cleaned.split('```')[1].split('```')[0];
+
+    const parsed = JSON.parse(cleaned.trim());
+    return parsed.results || [];
+}
+
+// ============================================================
+// RENDER RESULTS
+// ============================================================
+function renderResults(results, query) {
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('resultsArea').style.display = 'block';
+    document.getElementById('resultsTitle').textContent = `${results.length} results for "${query}"`;
+
+    const container = document.getElementById('resultsContainer');
+    if (!results.length) {
+        container.innerHTML = `<div class="empty-state"><h3>No results found</h3><p>Try a different search term or broader query.</p></div>`;
+        return;
+    }
+
+    container.innerHTML = results.map(r => {
+        const typeClass = r.type || 'project';
+        const badges = [
+            r.country ? `<span class="badge badge-country">${r.country}</span>` : '',
+            r.status ? `<span class="badge badge-status">${r.status}</span>` : '',
+            r.category ? `<span class="badge badge-type">${r.category}</span>` : '',
+            r.stoneTypes ? `<span class="badge badge-stone">${(r.stoneTypes||'').substring(0,30)}</span>` : '',
+        ].filter(Boolean).join('');
+
+        const email = r.email || r.architectEmail || r.designerEmail || '';
+        const contactName = r.contact || '';
+
+        let metaItems = '';
+        if (r.architect) metaItems += `<div class="meta-item"><div class="ml">Architect</div><div class="mv">${r.architect}</div></div>`;
+        if (r.architectEmail) metaItems += `<div class="meta-item"><div class="ml">Architect Email</div><div class="mv"><a href="mailto:${r.architectEmail}">${r.architectEmail}</a></div></div>`;
+        if (r.designer) metaItems += `<div class="meta-item"><div class="ml">Designer</div><div class="mv">${r.designer}</div></div>`;
+        if (r.designerEmail) metaItems += `<div class="meta-item"><div class="ml">Designer Email</div><div class="mv"><a href="mailto:${r.designerEmail}">${r.designerEmail}</a></div></div>`;
+        if (r.contractor) metaItems += `<div class="meta-item"><div class="ml">Contractor/Developer</div><div class="mv">${r.contractor}</div></div>`;
+        if (r.contactName || r.contact) metaItems += `<div class="meta-item"><div class="ml">Key Contact</div><div class="mv">${r.contact || r.contactName}${r.title ? ' — '+r.title : ''}</div></div>`;
+        if (email && !r.architectEmail && !r.designerEmail) metaItems += `<div class="meta-item"><div class="ml">Email</div><div class="mv"><a href="mailto:${email}">${email}</a></div></div>`;
+        if (r.contractorEmail) metaItems += `<div class="meta-item"><div class="ml">Contractor Email</div><div class="mv"><a href="mailto:${r.contractorEmail}">${r.contractorEmail}</a></div></div>`;
+        if (r.hq) metaItems += `<div class="meta-item"><div class="ml">HQ</div><div class="mv">${r.hq}</div></div>`;
+        if (r.value) metaItems += `<div class="meta-item"><div class="ml">Est. Value</div><div class="mv">${r.value}</div></div>`;
+        if (r.stoneApplications) metaItems += `<div class="meta-item"><div class="ml">Stone Applications</div><div class="mv">${r.stoneApplications}</div></div>`;
+        if (r.completion) metaItems += `<div class="meta-item"><div class="ml">Completion</div><div class="mv">${r.completion}</div></div>`;
+        if (r.linkedin) metaItems += `<div class="meta-item"><div class="ml">LinkedIn</div><div class="mv"><a href="https://${r.linkedin.replace('https://','')}" target="_blank">${r.linkedin}</a></div></div>`;
+
+        return `
+            <div class="result-card ${typeClass}">
+                <div class="result-card-header">
+                    <h4>${r.name}${r.city ? ' — '+r.city : ''}</h4>
+                    <div class="result-badges">${badges}</div>
+                </div>
+                ${metaItems ? '<div class="result-meta">'+metaItems+'</div>' : ''}
+                ${r.description ? '<div class="result-description">'+r.description+'</div>' : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+// ============================================================
+// SAVE TO DB
+// ============================================================
+async function saveAllToDb() {
+    for (const r of currentResults) {
+        const store = r.type === 'stakeholder' ? 'stakeholders' : 'projects';
+        await dbAdd(store, r);
+    }
+    await updateDbCount();
+    const btn = document.querySelector('[onclick="saveAllToDb()"]');
+    btn.textContent = '✓ Saved to DB';
+    btn.classList.add('active');
+    setTimeout(() => { btn.textContent = '☆ Save All to DB'; btn.classList.remove('active'); }, 2000);
+}
+
+// ============================================================
+// DATABASE VIEW
+// ============================================================
+function toggleDB() {
+    const dbView = document.getElementById('dbView');
+    const isActive = dbView.classList.contains('active');
+    if (isActive) {
+        dbView.classList.remove('active');
+        document.getElementById('btnDatabase').classList.remove('active');
+    } else {
+        dbView.classList.add('active');
+        document.getElementById('resultsArea').style.display = 'none';
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('btnDatabase').classList.add('active');
+        renderDbTab(dbShowingTab);
+    }
+}
+
+function switchDbTab(tab) {
+    dbShowingTab = tab;
+    document.querySelectorAll('.db-tab').forEach(t => t.classList.toggle('active', t.dataset.dbtab === tab));
+    renderDbTab(tab);
+}
+
+async function renderDbTab(tab) {
+    const items = await dbGetAll(tab);
+    const container = document.getElementById('dbContent');
+
+    if (!items.length) {
+        container.innerHTML = `<div class="empty-state" style="padding:40px"><h3>No ${tab} saved yet</h3><p>Search for something and click "Save All to DB" to start building your database.</p></div>`;
+        return;
+    }
+
+    if (tab === 'projects') {
+        container.innerHTML = `<div style="overflow-x:auto;"><table class="db-table">
+            <thead><tr><th>Name</th><th>Country</th><th>City</th><th>Type</th><th>Status</th><th>Value</th><th>Architect</th><th>Arch. Email</th><th>Designer</th><th>Des. Email</th><th>Stone</th><th>Saved</th></tr></thead>
+            <tbody>${items.map(i => `<tr>
+                <td>${i.name||''}</td><td>${i.country||''}</td><td>${i.city||''}</td><td>${i.category||''}</td><td>${i.status||''}</td><td>${i.value||''}</td>
+                <td>${i.architect||''}</td><td>${i.architectEmail ? '<a href="mailto:'+i.architectEmail+'">'+i.architectEmail+'</a>' : ''}</td>
+                <td>${i.designer||''}</td><td>${i.designerEmail ? '<a href="mailto:'+i.designerEmail+'">'+i.designerEmail+'</a>' : ''}</td>
+                <td>${(i.stoneTypes||'').substring(0,30)}</td><td>${(i.savedAt||'').substring(0,10)}</td>
+            </tr>`).join('')}</tbody></table></div>`;
+    } else if (tab === 'stakeholders') {
+        container.innerHTML = `<div style="overflow-x:auto;"><table class="db-table">
+            <thead><tr><th>Name</th><th>Category</th><th>Contact</th><th>Title</th><th>Email</th><th>Country</th><th>HQ</th><th>Saved</th></tr></thead>
+            <tbody>${items.map(i => `<tr>
+                <td>${i.name||''}</td><td>${i.category||''}</td><td>${i.contact||''}</td><td>${i.title||''}</td>
+                <td>${i.email ? '<a href="mailto:'+i.email+'">'+i.email+'</a>' : ''}</td>
+                <td>${i.country||''}</td><td>${i.hq||''}</td><td>${(i.savedAt||'').substring(0,10)}</td>
+            </tr>`).join('')}</tbody></table></div>`;
+    } else if (tab === 'searches') {
+        container.innerHTML = `<div style="overflow-x:auto;"><table class="db-table">
+            <thead><tr><th>Query</th><th>Date</th><th>Action</th></tr></thead>
+            <tbody>${items.reverse().map(i => `<tr>
+                <td style="cursor:pointer;color:var(--accent);" onclick="document.getElementById('searchInput').value='${(i.query||'').replace(/'/g,"\\'")}';doSearch();">${i.query||''}</td>
+                <td>${(i.timestamp||'').substring(0,16).replace('T',' ')}</td>
+                <td><span style="cursor:pointer;color:var(--accent);" onclick="document.getElementById('searchInput').value='${(i.query||'').replace(/'/g,"\\'")}';doSearch();">Re-run</span></td>
+            </tr>`).join('')}</tbody></table></div>`;
+    }
+}
+
+async function clearDb() {
+    if (!confirm('Clear entire local database? This cannot be undone.')) return;
+    await dbClear('projects');
+    await dbClear('stakeholders');
+    await dbClear('searches');
+    await updateDbCount();
+    renderDbTab(dbShowingTab);
+}
+
+// ============================================================
+// EXPORT
+// ============================================================
+function exportResults() {
+    if (!currentResults.length) return;
+    const headers = ['Name','Country','City','Type','Category','Status','Value','Architect','Architect Email','Designer','Designer Email','Contractor','Contractor Email','Contact','Title','Email','Stone Types','Stone Applications','HQ','Completion','Description'];
+    const rows = currentResults.map(r => [r.name,r.country,r.city,r.type,r.category,r.status,r.value,r.architect,r.architectEmail,r.designer,r.designerEmail,r.contractor,r.contractorEmail,r.contact,r.title,r.email,r.stoneTypes,r.stoneApplications,r.hq,r.completion,r.description]);
+    downloadCSV(headers, rows, 'stoneintel_results.csv');
+}
+
+async function exportDb() {
+    const projects = await dbGetAll('projects');
+    const stakeholders = await dbGetAll('stakeholders');
+    const all = [...projects, ...stakeholders];
+    const headers = ['Name','Country','City','Type','Category','Status','Value','Architect','Architect Email','Designer','Designer Email','Contractor','Contact','Title','Email','Stone Types','HQ','Saved'];
+    const rows = all.map(r => [r.name,r.country,r.city,r.type,r.category,r.status,r.value,r.architect,r.architectEmail,r.designer,r.designerEmail,r.contractor,r.contact,r.title,r.email,r.stoneTypes,r.hq,r.savedAt]);
+    downloadCSV(headers, rows, 'stoneintel_database.csv');
+}
+
+function downloadCSV(headers, rows, filename) {
+    const csv = [headers, ...rows].map(r => r.map(c => '"'+String(c||'').replace(/"/g,'""')+'"').join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+}
+
+// ============================================================
+// KEYBOARD
+// ============================================================
+document.getElementById('searchInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') doSearch();
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') document.getElementById('settingsOverlay').classList.remove('active');
+    if (e.key === '/' && document.activeElement !== document.getElementById('searchInput')) {
+        e.preventDefault();
+        document.getElementById('searchInput').focus();
+    }
+});
+
+// ============================================================
+// INIT
+// ============================================================
+async function init() {
+    await openDB();
+    loadSettings();
+    await updateDbCount();
+
+    // Load seed data from data/ folder if exists and DB is empty
+    try {
+        const projects = await dbGetAll('projects');
+        if (projects.length === 0) {
+            const resp = await fetch('data/projects.json');
+            if (resp.ok) {
+                const seedProjects = await resp.json();
+                for (const p of seedProjects) {
+                    await dbAdd('projects', { ...p, type: 'project', category: p.type });
+                }
+                const resp2 = await fetch('data/stakeholders.json');
+                if (resp2.ok) {
+                    const seedStakeholders = await resp2.json();
+                    for (const s of seedStakeholders) {
+                        await dbAdd('stakeholders', { ...s, type: 'stakeholder', name: s.company, email: s.bdEmail });
+                    }
+                }
+                await updateDbCount();
+            }
+        }
+    } catch(e) { /* No seed data, that's fine */ }
+}
+
+init();
+</script>
+</body>
+</html>

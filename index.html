@@ -6,6 +6,8 @@
     <title>StoneIntel — Natural Stone Project Search Engine</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <style>
         :root {
             --bg: #08080c;
@@ -32,7 +34,7 @@
         /* ========== HEADER ========== */
         .header { display: flex; align-items: center; justify-content: space-between; padding: 16px 32px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 100; }
         .logo { display: flex; align-items: center; gap: 10px; }
-        .logo-diamond { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; transform: rotate(0deg); }
+        .logo-diamond { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
         .logo h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
         .logo h1 span { color: var(--accent); }
         .header-actions { display: flex; gap: 8px; align-items: center; }
@@ -68,24 +70,32 @@
         .results-header h3 { font-size: 14px; color: var(--text2); font-weight: 500; }
         .results-actions { display: flex; gap: 8px; }
 
-        /* Loading state */
         .loading { text-align: center; padding: 60px 20px; }
         .loading-spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .loading-text { color: var(--text2); font-size: 14px; }
         .loading-sub { color: var(--text3); font-size: 12px; margin-top: 4px; }
 
-        /* Result cards */
         .result-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 12px; transition: border-color 0.2s; cursor: default; }
         .result-card:hover { border-color: var(--border2); }
         .result-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
         .result-card h4 { font-size: 17px; font-weight: 600; line-height: 1.3; }
-        .result-badges { display: flex; gap: 6px; flex-shrink: 0; margin-left: 12px; }
+        .result-badges { display: flex; gap: 6px; flex-shrink: 0; margin-left: 12px; flex-wrap: wrap; }
         .badge { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
         .badge-country { background: rgba(96,165,250,0.15); color: var(--blue); }
         .badge-status { background: rgba(74,222,128,0.15); color: var(--green); }
         .badge-type { background: rgba(167,139,250,0.15); color: var(--purple); }
         .badge-stone { background: rgba(201,169,110,0.15); color: var(--accent); }
+
+        /* Confidence badges */
+        .badge-high { background: rgba(74,222,128,0.15); color: var(--green); }
+        .badge-medium { background: rgba(250,204,21,0.15); color: var(--yellow); }
+        .badge-low { background: rgba(248,113,113,0.15); color: var(--red); }
+
+        .conf-tag { display: inline-block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 1px 6px; border-radius: 3px; margin-left: 6px; vertical-align: middle; }
+        .conf-high { background: rgba(74,222,128,0.15); color: var(--green); }
+        .conf-medium { background: rgba(250,204,21,0.15); color: var(--yellow); }
+        .conf-low { background: rgba(248,113,113,0.15); color: var(--red); }
 
         .result-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin-bottom: 12px; }
         .meta-item { font-size: 13px; }
@@ -95,12 +105,14 @@
         .meta-item a:hover { text-decoration: underline; }
 
         .result-description { font-size: 13px; color: var(--text2); line-height: 1.6; border-top: 1px solid var(--border); padding-top: 10px; margin-top: 4px; }
+        .result-source { font-size: 11px; color: var(--text3); margin-top: 6px; font-style: italic; }
 
-        /* Stakeholder result */
         .result-card.stakeholder { border-left: 3px solid var(--purple); }
         .result-card.project { border-left: 3px solid var(--accent); }
-        .result-card.stone { border-left: 3px solid var(--yellow); }
-        .result-card.market { border-left: 3px solid var(--blue); }
+
+        /* Verification warning banner */
+        .verify-banner { background: rgba(250,204,21,0.08); border: 1px solid rgba(250,204,21,0.2); border-radius: 8px; padding: 10px 16px; margin-bottom: 16px; font-size: 12px; color: var(--yellow); display: flex; align-items: center; gap: 8px; }
+        .verify-banner strong { font-weight: 700; }
 
         /* ========== SAVED DB VIEW ========== */
         .db-view { max-width: 1100px; margin: 0 auto; padding: 20px 32px 60px; display: none; }
@@ -132,13 +144,10 @@
         .btn-primary:hover { background: var(--accent2); }
         .btn-ghost { background: transparent; color: var(--text2); }
 
-        /* ========== EMPTY STATE ========== */
         .empty-state { text-align: center; padding: 80px 20px; }
-        .empty-state svg { width: 64px; height: 64px; color: var(--text3); margin-bottom: 16px; }
         .empty-state h3 { font-size: 18px; color: var(--text2); margin-bottom: 8px; }
         .empty-state p { font-size: 14px; color: var(--text3); max-width: 400px; margin: 0 auto; }
 
-        /* ========== RESPONSIVE ========== */
         @media (max-width: 768px) {
             .header { padding: 12px 16px; }
             .hero { padding: 32px 16px 24px; }
@@ -172,20 +181,20 @@
 <!-- HERO / SEARCH -->
 <div class="hero" id="hero">
     <h2>Natural Stone <span>Intelligence</span></h2>
-    <p>Search for high-end construction projects, architects, designers, stone types, and market data across any region. Powered by AI research.</p>
+    <p>Search for construction projects, architects, designers, and stone suppliers. AI-assisted research with confidence ratings — always verify before outreach.</p>
     <div class="search-container">
-        <input type="text" class="search-input" id="searchInput" placeholder="e.g. marble hotel projects in Vietnam, luxury architects in Tokyo, granite suppliers Dubai..." autofocus>
+        <input type="text" class="search-input" id="searchInput" placeholder="e.g. luxury hotel projects Singapore, marble suppliers Indonesia, architects Bangkok..." autofocus>
         <button class="search-btn" onclick="doSearch()" id="searchBtn">
             <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         </button>
     </div>
     <div class="search-tags">
-        <span class="search-tag" onclick="quickSearch('luxury hotel projects under construction in Singapore 2025')">Luxury hotels Singapore</span>
+        <span class="search-tag" onclick="quickSearch('luxury hotel projects under construction in Singapore')">Luxury hotels Singapore</span>
         <span class="search-tag" onclick="quickSearch('marble and granite architects in Bangkok Thailand')">Stone architects Bangkok</span>
-        <span class="search-tag" onclick="quickSearch('natural stone suppliers in Indonesia Bali')">Stone suppliers Bali</span>
-        <span class="search-tag" onclick="quickSearch('high end resort projects Malaysia Langkawi 2025 2026')">Resorts Malaysia</span>
-        <span class="search-tag" onclick="quickSearch('interior designers specializing in stone for luxury hotels Japan')">Designers Japan</span>
-        <span class="search-tag" onclick="quickSearch('airport terminal projects requiring natural stone Asia')">Airport projects Asia</span>
+        <span class="search-tag" onclick="quickSearch('natural stone suppliers in Indonesia')">Stone suppliers Indonesia</span>
+        <span class="search-tag" onclick="quickSearch('high end resort projects Malaysia')">Resorts Malaysia</span>
+        <span class="search-tag" onclick="quickSearch('interior designers luxury hotels Japan')">Designers Japan</span>
+        <span class="search-tag" onclick="quickSearch('airport terminal projects natural stone Asia')">Airport projects Asia</span>
     </div>
 </div>
 
@@ -219,7 +228,7 @@
         <div class="db-tab" data-dbtab="searches" onclick="switchDbTab('searches')">Search History <span class="cnt" id="dbCountSearches">0</span></div>
     </div>
     <div class="results-actions" style="margin-bottom:12px;">
-        <button class="btn-sm" onclick="exportDb()">&#8595; Export All CSV</button>
+        <button class="btn-sm" onclick="exportDbPdf()" style="color:var(--accent);border-color:var(--accent);">&#8595; Download PDF</button>
         <button class="btn-sm" onclick="clearDb()" style="color:var(--red);border-color:var(--red);">Clear Database</button>
     </div>
     <div id="dbContent"></div>
@@ -259,7 +268,7 @@ let currentResults = [];
 let dbShowingTab = 'projects';
 
 // ============================================================
-// INDEXEDDB — persistent local database
+// INDEXEDDB
 // ============================================================
 let db;
 function openDB() {
@@ -299,8 +308,7 @@ async function updateDbCount() {
     const p = await dbGetAll('projects');
     const s = await dbGetAll('stakeholders');
     const h = await dbGetAll('searches');
-    const total = p.length + s.length;
-    document.getElementById('dbCount').textContent = `Database: ${total} records`;
+    document.getElementById('dbCount').textContent = `Database: ${p.length + s.length} records`;
     document.getElementById('dbCountProjects').textContent = p.length;
     document.getElementById('dbCountStakeholders').textContent = s.length;
     document.getElementById('dbCountSearches').textContent = h.length;
@@ -354,7 +362,6 @@ async function doSearch() {
     const key = localStorage.getItem('si_key');
     if (!key) { openSettings(); return; }
 
-    // Switch to search mode
     document.getElementById('hero').classList.add('compact');
     document.getElementById('resultsArea').style.display = 'none';
     document.getElementById('dbView').classList.remove('active');
@@ -362,7 +369,6 @@ async function doSearch() {
     document.getElementById('loadingSub').textContent = `Batch 1 of 4 — Searching: "${query}"`;
     document.getElementById('btnDatabase').classList.remove('active');
 
-    // Save search to history
     await dbAdd('searches', { query, timestamp: new Date().toISOString() });
     await updateDbCount();
 
@@ -375,32 +381,28 @@ async function doSearch() {
         document.getElementById('loadingBar').style.width = ((batch - 1) / TOTAL_BATCHES * 100) + '%';
 
         try {
-            // Build a batch-specific prompt so each round returns different results
             let batchQuery = query;
             const skip = allResults.map(r => r.name).join(', ');
             if (batch === 1) {
-                batchQuery = query + ' — Top 8 major results.';
+                batchQuery = query + ' — Return up to 8 well-known, major results.';
             } else if (batch === 2) {
-                batchQuery = query + ' — Next 8 results. SKIP: ' + skip + '. Different/smaller firms.';
+                batchQuery = query + ' — Next set of results. SKIP these already found: ' + skip + '. Different/smaller firms.';
             } else if (batch === 3) {
-                batchQuery = query + ' — 8 more results. SKIP: ' + skip + '. Suppliers, contractors, niche designers.';
+                batchQuery = query + ' — More results. SKIP: ' + skip + '. Suppliers, contractors, niche designers.';
             } else {
-                batchQuery = query + ' — Final 8 unique results. SKIP: ' + skip + '. Market data, emerging projects, alternative firms.';
+                batchQuery = query + ' — Final unique results. SKIP: ' + skip + '. Emerging projects, alternative firms.';
             }
 
             const results = await callAI(batchQuery, key);
-            // Deduplicate by name
             const existingNames = new Set(allResults.map(r => (r.name||'').toLowerCase()));
             const newResults = results.filter(r => !existingNames.has((r.name||'').toLowerCase()));
             allResults = allResults.concat(newResults);
 
-            // Show progressive results after each batch
             currentResults = allResults;
             renderResults(allResults, query);
             document.getElementById('resultsArea').style.display = 'block';
         } catch(err) {
             if (batch === 1) {
-                // First batch failed — show error
                 errored = true;
                 document.getElementById('loadingState').style.display = 'none';
                 document.getElementById('resultsArea').style.display = 'block';
@@ -413,7 +415,6 @@ async function doSearch() {
                 `;
                 break;
             }
-            // Later batch failed — just stop, we have some results
             console.warn(`Batch ${batch} failed:`, err.message);
             break;
         }
@@ -430,43 +431,114 @@ async function callAI(query, key) {
     const provider = localStorage.getItem('si_provider') || 'anthropic';
     const model = localStorage.getItem('si_model') || 'claude-sonnet-4-5-20250514';
 
-    const systemPrompt = `Natural stone project research engine. JSON only.
+    // ====================================================================
+    // CRITICAL: ANTI-HALLUCINATION PROMPT
+    // The old prompt forced fabrication by requiring emails and exact counts.
+    // This new prompt explicitly forbids guessing and requires confidence levels.
+    // ====================================================================
+    const todayDate = new Date().toISOString().split('T')[0];
+    const currentYear = new Date().getFullYear();
+    const systemPrompt = `You are a factual research assistant for the natural stone construction industry. Return JSON only.
+Today's date is ${todayDate}.
 
-Return: {"r":[...]}
+CRITICAL RULES — READ CAREFULLY:
+1. ONLY return information you are HIGHLY CONFIDENT is factually correct based on your training data.
+2. If you are not sure about a field, set it to "" (empty string). NEVER GUESS OR FABRICATE.
+3. DO NOT invent email addresses. Only include an email if you have seen it in your training data. If unsure, leave blank.
+4. DO NOT invent contact names. If you don't know the specific person, leave the contact/title fields blank.
+5. DO NOT invent company names. Only return companies and projects you are confident actually exist.
+6. Each result MUST include a "cf" (confidence) field: "high" if you are very sure this is accurate, "medium" if mostly confident, "low" if uncertain.
+7. Each result SHOULD include a "src" (source hint) field: brief note on why you believe this data (e.g. "Well-known SG development", "Major listed developer", "Publicly announced project").
+8. Return FEWER results if needed — 3 accurate results are better than 8 fabricated ones.
+9. ONLY return projects and stakeholders. NO market analysis, NO stone category overviews, NO generic summaries.
 
-ONLY return projects and stakeholders. NO market analysis, NO stone category overviews.
+EMAIL RULES — FINDING INDIVIDUAL WORK EMAILS (VERY IMPORTANT):
+10. I need PERSONAL work emails for real people — NOT general company emails like info@ or enquiry@ or studio@.
+    For every architect, designer, developer, or contractor you mention, you MUST try to:
+    a) Find the REAL NAME of a relevant person at that firm — prioritize these roles:
+       - Design Director, Principal Architect, Managing Director, Project Director
+       - Head of Design, Senior Associate, Studio Director
+       - Head of Business Development, Materials Specification Manager
+       - Construction Director, Project Manager, Contracts Manager
+       - For developers: CEO, VP Development, Head of Projects
+    b) Then construct their personal work email using the company's known email format pattern.
+    c) Mark how you found it: ef:"known" (seen the exact email), ef:"pattern" (real name + verified domain format), ef:"lookup" (you know the person exists but constructed the email).
 
-Each object keys (omit if empty):
-- t: "p" (project) or "s" (stakeholder) ONLY
+    VERIFIED email format patterns for major firms (use REAL person names with these):
+    - Aedas: first.last@aedas.com | KPF: firstinitiallast@kpf.com (e.g. jvonklemperer@kpf.com)
+    - SOM: first.last@som.com | Gensler: first_last@gensler.com
+    - Foster + Partners: first.last@fosterandpartners.com | Zaha Hadid: first.last@zaha-hadid.com
+    - BIG: first.last@big.dk | WOHA: first.last@woha.net
+    - SCDA Architects: first@scdaarchitects.com (e.g. soo@scdaarchitects.com for Soo Chan)
+    - DP Architects: first.last@dpa.com.sg | RSP Architects: first_last@rsp.com.sg
+    - P&T Group: first.last@ptconsultants.com.sg | Ong & Ong: first.last@ong-ong.com
+    - HBA (Hirsch Bedner): first.last@hba.com | Wilson Associates: first.last@wilsonassociates.com
+    - Yabu Pushelberg: first.last@yabupushelberg.com | BENSLEY: first@bensley.com
+    - Rockwell Group: first.last@rockwellgroup.com | Hassell: first.last@hassellstudio.com
+    - Woods Bagot: first.last@woodsbagot.com | Perkins&Will: first.last@perkinswill.com
+    - HOK: first.last@hok.com | NBBJ: first.last@nbbj.com | HDR: first.last@hdrinc.com
+    - Arcadis: first.last@arcadis.com | DLR Group: first.last@dlrgroup.com
+    - CapitaLand: first.last@capitaland.com | CDL: first.last@cdl.com.sg
+    - UOL Group: first.last@uol.com.sg | Frasers Property: first.last@frasersproperty.com
+    - Hongkong Land: first.last@hkland.com | Swire Properties: first.last@swireproperties.com
+    - CPN (Central Pattana): first.last@centralpattana.co.th
+    - Siam Cement Group: first.last@scg.com | Gamuda: first.last@gamuda.com.my
+    - Nikken Sekkei: first.last@nikken.jp | Mitsubishi Jisho: first.last@mec.co.jp
+    - Obayashi: first.last@obayashi.co.jp | Shimizu: first.last@shimz.co.jp
+    - Kajima: first.last@kajima.co.jp | Takenaka: first.last@takenaka.co.jp
+    For firms NOT in this list: find their website domain and use first.last@domain format.
+
+11. PRIORITIZE personal work emails. But if you truly cannot find a real person's name for a firm, you MAY fall back to a general company email (info@, enquiry@) as a last resort. Mark ef:"domain" for those.
+12. For EVERY firm mentioned (architect, designer, developer, contractor), you MUST try to identify a SPECIFIC REAL PERSON by name. Include:
+    - ct: their full name (e.g. "Soo Chan", "Bill Bensley", "Moshe Safdie")
+    - ti: their exact title (e.g. "Founding Principal", "Design Director", "Managing Director", "Head of Interiors", "VP Development")
+    - This is critical — I need to know WHO to contact, not just the firm name.
+    - If you know multiple key people at a firm, pick the most relevant for stone/materials specification decisions.
+
+TIMING FILTER — VERY IMPORTANT:
+13. Today is ${todayDate}. For PROJECTS, ONLY return projects that are still ACTIONABLE — meaning:
+    - Status is "Under Construction", "Under Tender", "Planned", or "Design Phase"
+    - Expected completion is ${currentYear} or later (ideally ${currentYear} to ${currentYear + 2})
+    - There is still a realistic window to join the tender, bid for stone supply, or approach the project team
+    - Do NOT return projects that are already COMPLETED, TOPPED OUT, or fully handed over
+    - Do NOT return projects completing within the next 3 months (too late to join)
+    - PRIORITIZE projects in early/mid construction or planning stages where stone procurement is still open
+    - For each project, include the "sta" (status) field indicating its current phase
+14. For STAKEHOLDERS (architects, designers, suppliers, contractors), timing does not apply — return them if they are active firms.
+
+Return format: {"r":[...]}
+
+Each object keys (OMIT if unknown — do NOT fill with guesses):
+- t: "p" (project) or "s" (stakeholder)
 - n: project or company name
 - co: country
 - ci: city
 - cat: project type OR role (Architect/Designer/Contractor/Supplier)
-- sta: Under Construction / Under Tender / Planned
-- v: est. value
-- d: 1 sentence max 12 words
-- sn: stone types needed
-- ar: architect firm
-- ae: architect work email (firstname.lastname@company.com)
+- sta: Under Construction / Under Tender / Planned / Completed
+- v: estimated value (only if publicly reported)
+- d: 1-sentence description, max 15 words
+- sn: stone types (only if specifically reported for this project)
+- ar: architect firm name
+- ae: architect email (use email rules above)
+- aef: email finding method for architect ("known","pattern","domain","unknown")
 - ds: interior designer firm
-- de: designer work email
-- cn: contractor/developer
-- ce: contractor email
-- ct: key contact person
+- de: designer email (use email rules above)
+- def: email finding method for designer ("known","pattern","domain","unknown")
+- cn: contractor or developer name
+- ce: contractor email (use email rules above)
+- cef: email finding method for contractor
+- ct: key contact person (ONLY if you know the real person's name)
 - ti: their role
-- em: their individual work email
+- em: their email (use email rules above)
+- emf: email finding method for contact
 - hq: HQ location
 - cp: completion year
-- sp: stone suppliers already awarded/competing (comma separated company names)
-- se: those suppliers' emails (comma separated)
+- sp: stone suppliers involved (ONLY if specifically known)
+- se: supplier emails
+- cf: "high", "medium", or "low" — your confidence this result is accurate
+- src: brief source hint (e.g. "Major listed project", "Well-known firm")
 
-Rules:
-- EXACTLY 8 results
-- ONLY real projects and real companies
-- Every result MUST have at least one email
-- Emails: real company domain, firstname.lastname format
-- NO market overviews, NO stone category summaries
-- JSON only, no markdown`;
+JSON only. No markdown. No explanations.`;
 
     let body, url, headers;
 
@@ -515,32 +587,23 @@ Rules:
         text = data.choices[0].message.content;
     }
 
-    // Parse JSON from response (handle markdown wrapping + truncation)
     let cleaned = text;
     if (cleaned.includes('```json')) cleaned = cleaned.split('```json')[1].split('```')[0];
     else if (cleaned.includes('```')) cleaned = cleaned.split('```')[1].split('```')[0];
     cleaned = cleaned.trim();
 
-    // Try to repair truncated JSON
     function tryParse(str) {
-        // Direct try
         try { return JSON.parse(str); } catch(e) {}
-        // Try closing off truncated array/object
-        const fixes = [']}', '"}]}', '"}]}'];
-        for (const fix of fixes) {
-            // Find last complete object
-            const lastBrace = str.lastIndexOf('},');
-            if (lastBrace > 0) {
-                const attempt = str.substring(0, lastBrace + 1) + ']}';
-                try { return JSON.parse(attempt); } catch(e) {}
-            }
+        const lastBrace = str.lastIndexOf('},');
+        if (lastBrace > 0) {
+            const attempt = str.substring(0, lastBrace + 1) + ']}';
+            try { return JSON.parse(attempt); } catch(e) {}
         }
-        // Try wrapping
         const arrStart = str.indexOf('[');
         if (arrStart >= 0) {
-            const lastBrace = str.lastIndexOf('},');
-            if (lastBrace > 0) {
-                const attempt = '{"r":' + str.substring(arrStart, lastBrace + 1) + ']}';
+            const lb = str.lastIndexOf('},');
+            if (lb > 0) {
+                const attempt = '{"r":' + str.substring(arrStart, lb + 1) + ']}';
                 try { return JSON.parse(attempt); } catch(e) {}
             }
         }
@@ -550,12 +613,13 @@ Rules:
     const parsed = tryParse(cleaned);
     if (!parsed) throw new Error('Could not parse AI response. Try a shorter or more specific query.');
 
-    // Map short keys to full keys, filter out market/stone overview fluff
     const raw = parsed.r || parsed.results || [];
-    const typeMap = { p: 'project', s: 'stakeholder', st: 'stone', m: 'market' };
+    const typeMap = { p: 'project', s: 'stakeholder' };
+
+    // Filter out anything that isn't a project or stakeholder
     return raw.filter(r => {
         const type = r.t || r.type || '';
-        return type !== 'm' && type !== 'market' && type !== 'st' && type !== 'stone';
+        return type === 'p' || type === 's' || type === 'project' || type === 'stakeholder';
     }).map(r => ({
         type: typeMap[r.t] || r.t || r.type || 'project',
         name: r.n || r.name || '',
@@ -566,21 +630,25 @@ Rules:
         value: r.v || r.value || '',
         description: r.d || r.description || '',
         stoneTypes: r.sn || r.stoneTypes || '',
-        stoneApplications: r.sa || r.stoneApplications || '',
         architect: r.ar || r.architect || '',
         architectEmail: r.ae || r.architectEmail || '',
+        architectEmailMethod: r.aef || '',
         designer: r.ds || r.designer || '',
         designerEmail: r.de || r.designerEmail || '',
+        designerEmailMethod: r.def || '',
         contractor: r.cn || r.contractor || '',
         contractorEmail: r.ce || r.contractorEmail || '',
+        contractorEmailMethod: r.cef || '',
         contact: r.ct || r.contact || '',
         title: r.ti || r.title || '',
         email: r.em || r.email || '',
-        linkedin: r.li || r.linkedin || '',
+        emailMethod: r.emf || '',
         hq: r.hq || '',
         completion: r.cp || r.completion || '',
         stoneSuppliers: r.sp || r.stoneSuppliers || '',
         supplierEmails: r.se || r.supplierEmails || '',
+        confidence: r.cf || r.confidence || 'medium',
+        sourceHint: r.src || r.sourceHint || '',
     }));
 }
 
@@ -598,32 +666,72 @@ function renderResults(results, query) {
         return;
     }
 
-    container.innerHTML = results.map(r => {
+    // Count confidence levels
+    const highCount = results.filter(r => r.confidence === 'high').length;
+    const medCount = results.filter(r => r.confidence === 'medium').length;
+    const lowCount = results.filter(r => r.confidence === 'low').length;
+
+    let html = `<div class="verify-banner">
+        <strong>&#9888;</strong> AI-researched results — verify all details before outreach.
+        <span style="margin-left:auto;font-size:11px;">
+            <span style="color:var(--green);">${highCount} high</span> /
+            <span style="color:var(--yellow);">${medCount} medium</span> /
+            <span style="color:var(--red);">${lowCount} low</span> confidence
+        </span>
+    </div>`;
+
+    html += results.map(r => {
         const typeClass = r.type || 'project';
+        const confClass = r.confidence === 'high' ? 'conf-high' : r.confidence === 'low' ? 'conf-low' : 'conf-medium';
+        const confLabel = r.confidence === 'high' ? 'HIGH' : r.confidence === 'low' ? 'LOW' : 'MED';
+
+        // Timing badge for projects
+        let timingBadge = '';
+        if (r.type === 'project' && r.completion) {
+            const compYear = parseInt(r.completion);
+            const now = new Date().getFullYear();
+            if (compYear && compYear > now + 1) {
+                timingBadge = `<span class="badge badge-high">Good timing</span>`;
+            } else if (compYear && compYear > now) {
+                timingBadge = `<span class="badge badge-medium">Act soon</span>`;
+            } else if (compYear && compYear <= now) {
+                timingBadge = `<span class="badge badge-low">May be late</span>`;
+            }
+        }
+
         const badges = [
             r.country ? `<span class="badge badge-country">${r.country}</span>` : '',
             r.status ? `<span class="badge badge-status">${r.status}</span>` : '',
             r.category ? `<span class="badge badge-type">${r.category}</span>` : '',
             r.stoneTypes ? `<span class="badge badge-stone">${(r.stoneTypes||'').substring(0,30)}</span>` : '',
+            timingBadge,
+            `<span class="badge badge-${r.confidence || 'medium'}">${confLabel} conf.</span>`,
         ].filter(Boolean).join('');
 
-        const email = r.email || r.architectEmail || r.designerEmail || '';
-        const contactName = r.contact || '';
+        // Email method tag helper
+        function emTag(method) {
+            if (!method) return '';
+            const colors = { known: 'var(--green)', pattern: 'var(--blue)', lookup: 'var(--purple)', domain: 'var(--yellow)', unknown: 'var(--red)' };
+            const labels = { known: 'VERIFIED', pattern: 'NAME+PATTERN', lookup: 'CONSTRUCTED', domain: 'GENERAL', unknown: '?' };
+            const c = colors[method] || 'var(--text3)';
+            const l = labels[method] || method;
+            return ` <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:${c}22;color:${c};font-weight:700;letter-spacing:0.3px;">${l}</span>`;
+        }
 
         let metaItems = '';
         if (r.architect) metaItems += `<div class="meta-item"><div class="ml">Architect</div><div class="mv">${r.architect}</div></div>`;
-        if (r.architectEmail) metaItems += `<div class="meta-item"><div class="ml">Architect Email</div><div class="mv"><a href="mailto:${r.architectEmail}">${r.architectEmail}</a></div></div>`;
+        if (r.architectEmail) metaItems += `<div class="meta-item"><div class="ml">Architect Email</div><div class="mv"><a href="mailto:${r.architectEmail}">${r.architectEmail}</a>${emTag(r.architectEmailMethod)}</div></div>`;
         if (r.designer) metaItems += `<div class="meta-item"><div class="ml">Designer</div><div class="mv">${r.designer}</div></div>`;
-        if (r.designerEmail) metaItems += `<div class="meta-item"><div class="ml">Designer Email</div><div class="mv"><a href="mailto:${r.designerEmail}">${r.designerEmail}</a></div></div>`;
-        if (r.contractor) metaItems += `<div class="meta-item"><div class="ml">Contractor/Developer</div><div class="mv">${r.contractor}</div></div>`;
-        if (r.contactName || r.contact) metaItems += `<div class="meta-item"><div class="ml">Key Contact</div><div class="mv">${r.contact || r.contactName}${r.title ? ' — '+r.title : ''}</div></div>`;
-        if (email && !r.architectEmail && !r.designerEmail) metaItems += `<div class="meta-item"><div class="ml">Email</div><div class="mv"><a href="mailto:${email}">${email}</a></div></div>`;
-        if (r.contractorEmail) metaItems += `<div class="meta-item"><div class="ml">Contractor Email</div><div class="mv"><a href="mailto:${r.contractorEmail}">${r.contractorEmail}</a></div></div>`;
+        if (r.designerEmail) metaItems += `<div class="meta-item"><div class="ml">Designer Email</div><div class="mv"><a href="mailto:${r.designerEmail}">${r.designerEmail}</a>${emTag(r.designerEmailMethod)}</div></div>`;
+        if (r.contractor) metaItems += `<div class="meta-item"><div class="ml">Developer / Contractor</div><div class="mv">${r.contractor}</div></div>`;
+        if (r.contact) metaItems += `<div class="meta-item"><div class="ml">Key Contact</div><div class="mv">${r.contact}${r.title ? ' — '+r.title : ''}</div></div>`;
+        if (r.email) metaItems += `<div class="meta-item"><div class="ml">Email</div><div class="mv"><a href="mailto:${r.email}">${r.email}</a>${emTag(r.emailMethod)}</div></div>`;
+        if (r.contractorEmail) metaItems += `<div class="meta-item"><div class="ml">Developer Email</div><div class="mv"><a href="mailto:${r.contractorEmail}">${r.contractorEmail}</a>${emTag(r.contractorEmailMethod)}</div></div>`;
         if (r.hq) metaItems += `<div class="meta-item"><div class="ml">HQ</div><div class="mv">${r.hq}</div></div>`;
         if (r.value) metaItems += `<div class="meta-item"><div class="ml">Est. Value</div><div class="mv">${r.value}</div></div>`;
-        if (r.stoneApplications) metaItems += `<div class="meta-item"><div class="ml">Stone Applications</div><div class="mv">${r.stoneApplications}</div></div>`;
         if (r.completion) metaItems += `<div class="meta-item"><div class="ml">Completion</div><div class="mv">${r.completion}</div></div>`;
-        if (r.linkedin) metaItems += `<div class="meta-item"><div class="ml">LinkedIn</div><div class="mv"><a href="https://${r.linkedin.replace('https://','')}" target="_blank">${r.linkedin}</a></div></div>`;
+
+        const sourceNote = r.sourceHint ? `<div class="result-source">Source: ${r.sourceHint}</div>` : '';
 
         return `
             <div class="result-card ${typeClass}">
@@ -633,9 +741,12 @@ function renderResults(results, query) {
                 </div>
                 ${metaItems ? '<div class="result-meta">'+metaItems+'</div>' : ''}
                 ${r.description ? '<div class="result-description">'+r.description+'</div>' : ''}
+                ${sourceNote}
             </div>
         `;
     }).join('');
+
+    container.innerHTML = html;
 }
 
 // ============================================================
@@ -647,7 +758,6 @@ async function saveAllToDb() {
         await dbAdd(store, r);
     }
     await updateDbCount();
-    // Auto-download the full DB as JSON for backup / repo sync
     await downloadDbJson();
     const btn = document.querySelector('[onclick="saveAllToDb()"]');
     btn.textContent = '✓ Saved + JSON Downloaded';
@@ -655,17 +765,11 @@ async function saveAllToDb() {
     setTimeout(() => { btn.textContent = '☆ Save All to DB'; btn.classList.remove('active'); }, 3000);
 }
 
-// Download entire DB as a single JSON file (for uploading to repo)
 async function downloadDbJson() {
     const projects = await dbGetAll('projects');
     const stakeholders = await dbGetAll('stakeholders');
     const searches = await dbGetAll('searches');
-    const dbExport = {
-        exportedAt: new Date().toISOString(),
-        projects,
-        stakeholders,
-        searches
-    };
+    const dbExport = { exportedAt: new Date().toISOString(), projects, stakeholders, searches };
     const blob = new Blob([JSON.stringify(dbExport, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -674,10 +778,7 @@ async function downloadDbJson() {
     URL.revokeObjectURL(a.href);
 }
 
-// Import a saved DB JSON file
-function importDbJson() {
-    document.getElementById('importFileInput').click();
-}
+function importDbJson() { document.getElementById('importFileInput').click(); }
 
 async function handleImport(event) {
     const file = event.target.files[0];
@@ -688,37 +789,26 @@ async function handleImport(event) {
         let count = 0;
         if (data.projects) {
             for (const p of data.projects) {
-                const clean = { ...p };
-                delete clean.id; // Remove old IDs so IndexedDB auto-generates new ones
-                delete clean.savedAt;
-                await dbAdd('projects', clean);
-                count++;
+                const clean = { ...p }; delete clean.id; delete clean.savedAt;
+                await dbAdd('projects', clean); count++;
             }
         }
         if (data.stakeholders) {
             for (const s of data.stakeholders) {
-                const clean = { ...s };
-                delete clean.id;
-                delete clean.savedAt;
-                await dbAdd('stakeholders', clean);
-                count++;
+                const clean = { ...s }; delete clean.id; delete clean.savedAt;
+                await dbAdd('stakeholders', clean); count++;
             }
         }
         if (data.searches) {
             for (const h of data.searches) {
-                const clean = { ...h };
-                delete clean.id;
-                delete clean.savedAt;
+                const clean = { ...h }; delete clean.id; delete clean.savedAt;
                 await dbAdd('searches', clean);
             }
         }
         await updateDbCount();
         alert(`Imported ${count} records successfully!`);
-        // Reset file input
         event.target.value = '';
-    } catch(e) {
-        alert('Error importing file: ' + e.message);
-    }
+    } catch(e) { alert('Error importing file: ' + e.message); }
 }
 
 // ============================================================
@@ -756,24 +846,34 @@ async function renderDbTab(tab) {
 
     if (tab === 'projects') {
         container.innerHTML = `<div style="overflow-x:auto;"><table class="db-table">
-            <thead><tr><th>Name</th><th>Country</th><th>City</th><th>Type</th><th>Status</th><th>Value</th><th>Architect</th><th>Arch. Email</th><th>Designer</th><th>Des. Email</th><th>Stone Types</th><th style="background:rgba(201,169,110,0.2);color:var(--accent);">Stone Suppliers Involved</th><th style="background:rgba(201,169,110,0.2);color:var(--accent);">Supplier Emails</th><th>Saved</th></tr></thead>
-            <tbody>${items.map(i => `<tr>
+            <thead><tr><th>Name</th><th>Country</th><th>City</th><th>Type</th><th>Status</th><th>Value</th><th>Architect</th><th>Arch. Email</th><th>Designer</th><th>Des. Email</th><th>Developer</th><th>Stone Types</th><th style="background:rgba(201,169,110,0.2);color:var(--accent);">Stone Suppliers</th><th style="background:rgba(201,169,110,0.2);color:var(--accent);">Supplier Emails</th><th>Confidence</th><th>Source</th><th>Saved</th></tr></thead>
+            <tbody>${items.map(i => {
+                const confColor = i.confidence === 'high' ? 'var(--green)' : i.confidence === 'low' ? 'var(--red)' : 'var(--yellow)';
+                return `<tr>
                 <td>${i.name||''}</td><td>${i.country||''}</td><td>${i.city||''}</td><td>${i.category||''}</td><td>${i.status||''}</td><td>${i.value||''}</td>
                 <td>${i.architect||''}</td><td>${i.architectEmail ? '<a href="mailto:'+i.architectEmail+'">'+i.architectEmail+'</a>' : ''}</td>
                 <td>${i.designer||''}</td><td>${i.designerEmail ? '<a href="mailto:'+i.designerEmail+'">'+i.designerEmail+'</a>' : ''}</td>
+                <td>${i.contractor||''}</td>
                 <td>${(i.stoneTypes||'').substring(0,40)}</td>
                 <td style="color:var(--accent);">${i.stoneSuppliers||''}</td>
                 <td>${(i.supplierEmails||'').split(',').map(e => e.trim()).filter(Boolean).map(e => '<a href="mailto:'+e+'">'+e+'</a>').join(', ')}</td>
+                <td style="color:${confColor};font-weight:600;">${(i.confidence||'medium').toUpperCase()}</td>
+                <td style="color:var(--text3);font-size:11px;">${i.sourceHint||''}</td>
                 <td>${(i.savedAt||'').substring(0,10)}</td>
-            </tr>`).join('')}</tbody></table></div>`;
+            </tr>`}).join('')}</tbody></table></div>`;
     } else if (tab === 'stakeholders') {
         container.innerHTML = `<div style="overflow-x:auto;"><table class="db-table">
-            <thead><tr><th>Name</th><th>Category</th><th>Contact</th><th>Title</th><th>Email</th><th>Country</th><th>HQ</th><th>Saved</th></tr></thead>
-            <tbody>${items.map(i => `<tr>
+            <thead><tr><th>Name</th><th>Category</th><th>Contact</th><th>Title</th><th>Email</th><th>Country</th><th>HQ</th><th>Confidence</th><th>Source</th><th>Saved</th></tr></thead>
+            <tbody>${items.map(i => {
+                const confColor = i.confidence === 'high' ? 'var(--green)' : i.confidence === 'low' ? 'var(--red)' : 'var(--yellow)';
+                return `<tr>
                 <td>${i.name||''}</td><td>${i.category||''}</td><td>${i.contact||''}</td><td>${i.title||''}</td>
                 <td>${i.email ? '<a href="mailto:'+i.email+'">'+i.email+'</a>' : ''}</td>
-                <td>${i.country||''}</td><td>${i.hq||''}</td><td>${(i.savedAt||'').substring(0,10)}</td>
-            </tr>`).join('')}</tbody></table></div>`;
+                <td>${i.country||''}</td><td>${i.hq||''}</td>
+                <td style="color:${confColor};font-weight:600;">${(i.confidence||'medium').toUpperCase()}</td>
+                <td style="color:var(--text3);font-size:11px;">${i.sourceHint||''}</td>
+                <td>${(i.savedAt||'').substring(0,10)}</td>
+            </tr>`}).join('')}</tbody></table></div>`;
     } else if (tab === 'searches') {
         container.innerHTML = `<div style="overflow-x:auto;"><table class="db-table">
             <thead><tr><th>Query</th><th>Date</th><th>Action</th></tr></thead>
@@ -799,8 +899,8 @@ async function clearDb() {
 // ============================================================
 function exportResults() {
     if (!currentResults.length) return;
-    const headers = ['Name','Country','City','Type','Category','Status','Value','Architect','Architect Email','Designer','Designer Email','Contractor','Contractor Email','Contact','Title','Email','Stone Types','Stone Suppliers Involved','Supplier Emails','HQ','Completion','Description'];
-    const rows = currentResults.map(r => [r.name,r.country,r.city,r.type,r.category,r.status,r.value,r.architect,r.architectEmail,r.designer,r.designerEmail,r.contractor,r.contractorEmail,r.contact,r.title,r.email,r.stoneTypes,r.stoneSuppliers,r.supplierEmails,r.hq,r.completion,r.description]);
+    const headers = ['Name','Country','City','Type','Category','Status','Value','Architect','Architect Email','Arch Email Method','Designer','Designer Email','Des Email Method','Developer','Developer Email','Dev Email Method','Contact','Title','Email','Email Method','Stone Types','Stone Suppliers','Supplier Emails','HQ','Completion','Confidence','Source','Description'];
+    const rows = currentResults.map(r => [r.name,r.country,r.city,r.type,r.category,r.status,r.value,r.architect,r.architectEmail,r.architectEmailMethod,r.designer,r.designerEmail,r.designerEmailMethod,r.contractor,r.contractorEmail,r.contractorEmailMethod,r.contact,r.title,r.email,r.emailMethod,r.stoneTypes,r.stoneSuppliers,r.supplierEmails,r.hq,r.completion,r.confidence,r.sourceHint,r.description]);
     downloadCSV(headers, rows, 'stoneintel_results.csv');
 }
 
@@ -808,8 +908,8 @@ async function exportDb() {
     const projects = await dbGetAll('projects');
     const stakeholders = await dbGetAll('stakeholders');
     const all = [...projects, ...stakeholders];
-    const headers = ['Name','Country','City','Type','Category','Status','Value','Architect','Architect Email','Designer','Designer Email','Contractor','Contact','Title','Email','Stone Types','Stone Suppliers Involved','Supplier Emails','HQ','Saved'];
-    const rows = all.map(r => [r.name,r.country,r.city,r.type,r.category,r.status,r.value,r.architect,r.architectEmail,r.designer,r.designerEmail,r.contractor,r.contact,r.title,r.email,r.stoneTypes,r.stoneSuppliers,r.supplierEmails,r.hq,r.savedAt]);
+    const headers = ['Name','Country','City','Type','Category','Status','Value','Architect','Architect Email','Designer','Designer Email','Developer','Contact','Title','Email','Stone Types','Stone Suppliers','Supplier Emails','HQ','Confidence','Source','Saved'];
+    const rows = all.map(r => [r.name,r.country,r.city,r.type,r.category,r.status,r.value,r.architect,r.architectEmail,r.designer,r.designerEmail,r.contractor,r.contact,r.title,r.email,r.stoneTypes,r.stoneSuppliers,r.supplierEmails,r.hq,r.confidence,r.sourceHint,r.savedAt]);
     downloadCSV(headers, rows, 'stoneintel_database.csv');
 }
 
@@ -817,6 +917,137 @@ function downloadCSV(headers, rows, filename) {
     const csv = [headers, ...rows].map(r => r.map(c => '"'+String(c||'').replace(/"/g,'""')+'"').join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+}
+
+// PDF EXPORT
+async function exportDbPdf() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
+
+    const projects = await dbGetAll('projects');
+    const stakeholders = await dbGetAll('stakeholders');
+    const now = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
+
+    // Title page
+    doc.setFillColor(27, 42, 74);
+    doc.rect(0, 0, 420, 297, 'F');
+    doc.setTextColor(201, 169, 110);
+    doc.setFontSize(42);
+    doc.text('StoneIntel', 210, 100, { align: 'center' });
+    doc.setFontSize(18);
+    doc.setTextColor(255, 255, 255);
+    doc.text('Natural Stone Project Intelligence Database', 210, 120, { align: 'center' });
+    doc.setFontSize(12);
+    doc.setTextColor(180, 180, 200);
+    doc.text(`Exported: ${now}`, 210, 145, { align: 'center' });
+    doc.text(`${projects.length} Projects | ${stakeholders.length} Stakeholders`, 210, 158, { align: 'center' });
+    doc.setFontSize(9);
+    doc.setTextColor(150, 150, 170);
+    doc.text('Confidential — Verify all data before outreach', 210, 180, { align: 'center' });
+
+    // Projects table
+    if (projects.length) {
+        doc.addPage();
+        doc.setFillColor(27, 42, 74);
+        doc.rect(0, 0, 420, 16, 'F');
+        doc.setTextColor(201, 169, 110);
+        doc.setFontSize(14);
+        doc.text('PROJECTS', 10, 11);
+        doc.setTextColor(180, 180, 200);
+        doc.setFontSize(9);
+        doc.text(`${projects.length} records`, 380, 11);
+
+        doc.autoTable({
+            startY: 20,
+            head: [['Project', 'Country', 'City', 'Type', 'Status', 'Value', 'Completion', 'Architect', 'Architect Email', 'Designer', 'Designer Email', 'Developer', 'Contact Person', 'Contact Title', 'Contact Email', 'Stone Types', 'Stone Suppliers', 'Confidence']],
+            body: projects.map(r => [
+                r.name||'', r.country||'', r.city||'', r.category||'', r.status||'', r.value||'', r.completion||'',
+                r.architect||'', r.architectEmail||'', r.designer||'', r.designerEmail||'',
+                r.contractor||'', r.contact||'', r.title||'', r.email||r.contractorEmail||'',
+                (r.stoneTypes||'').substring(0,40), r.stoneSuppliers||'', (r.confidence||'medium').toUpperCase()
+            ]),
+            styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak', textColor: [40, 40, 50] },
+            headStyles: { fillColor: [27, 42, 74], textColor: [201, 169, 110], fontSize: 7, fontStyle: 'bold' },
+            alternateRowStyles: { fillColor: [245, 245, 250] },
+            columnStyles: {
+                0: { cellWidth: 32, fontStyle: 'bold' },
+                1: { cellWidth: 18 },
+                2: { cellWidth: 18 },
+                3: { cellWidth: 22 },
+                4: { cellWidth: 22 },
+                5: { cellWidth: 16 },
+                6: { cellWidth: 16 },
+                7: { cellWidth: 28 },
+                8: { cellWidth: 36 },
+                9: { cellWidth: 28 },
+                10: { cellWidth: 36 },
+                11: { cellWidth: 28 },
+                12: { cellWidth: 22 },
+                13: { cellWidth: 22 },
+                14: { cellWidth: 36 },
+                15: { cellWidth: 24 },
+                16: { cellWidth: 24 },
+                17: { cellWidth: 16 },
+            },
+            margin: { left: 5, right: 5 },
+            didDrawPage: function(data) {
+                doc.setFillColor(27, 42, 74);
+                doc.rect(0, 287, 420, 10, 'F');
+                doc.setTextColor(150, 150, 170);
+                doc.setFontSize(7);
+                doc.text('StoneIntel Database — Confidential', 10, 293);
+                doc.text('Page ' + doc.internal.getNumberOfPages(), 400, 293);
+            }
+        });
+    }
+
+    // Stakeholders table
+    if (stakeholders.length) {
+        doc.addPage();
+        doc.setFillColor(27, 42, 74);
+        doc.rect(0, 0, 420, 16, 'F');
+        doc.setTextColor(201, 169, 110);
+        doc.setFontSize(14);
+        doc.text('STAKEHOLDERS', 10, 11);
+        doc.setTextColor(180, 180, 200);
+        doc.setFontSize(9);
+        doc.text(`${stakeholders.length} records`, 380, 11);
+
+        doc.autoTable({
+            startY: 20,
+            head: [['Company / Firm', 'Role', 'Country', 'HQ', 'Contact Person', 'Title', 'Personal Email', 'Description', 'Confidence']],
+            body: stakeholders.map(r => [
+                r.name||'', r.category||'', r.country||'', r.hq||'',
+                r.contact||'', r.title||'', r.email||'',
+                (r.description||'').substring(0,60), (r.confidence||'medium').toUpperCase()
+            ]),
+            styles: { fontSize: 8, cellPadding: 2.5, overflow: 'linebreak', textColor: [40, 40, 50] },
+            headStyles: { fillColor: [27, 42, 74], textColor: [201, 169, 110], fontSize: 8, fontStyle: 'bold' },
+            alternateRowStyles: { fillColor: [245, 245, 250] },
+            columnStyles: {
+                0: { cellWidth: 45, fontStyle: 'bold' },
+                1: { cellWidth: 30 },
+                2: { cellWidth: 25 },
+                3: { cellWidth: 35 },
+                4: { cellWidth: 35 },
+                5: { cellWidth: 40 },
+                6: { cellWidth: 55 },
+                7: { cellWidth: 60 },
+                8: { cellWidth: 20 },
+            },
+            margin: { left: 10, right: 10 },
+            didDrawPage: function(data) {
+                doc.setFillColor(27, 42, 74);
+                doc.rect(0, 287, 420, 10, 'F');
+                doc.setTextColor(150, 150, 170);
+                doc.setFontSize(7);
+                doc.text('StoneIntel Database — Confidential', 10, 293);
+                doc.text('Page ' + doc.internal.getNumberOfPages(), 400, 293);
+            }
+        });
+    }
+
+    doc.save('StoneIntel_Database.pdf');
 }
 
 // ============================================================
@@ -841,60 +1072,32 @@ async function init() {
     loadSettings();
     await updateDbCount();
 
-    // Load saved DB from repo if browser DB is empty
     try {
         const projects = await dbGetAll('projects');
         if (projects.length === 0) {
-            // First try: load the synced saved-db.json (your accumulated data)
             let loaded = false;
             try {
                 const resp = await fetch('data/saved-db.json');
                 if (resp.ok) {
                     const data = await resp.json();
-                    if (data.projects) {
-                        for (const p of data.projects) {
-                            const clean = { ...p }; delete clean.id;
-                            await dbAdd('projects', clean);
-                        }
-                    }
-                    if (data.stakeholders) {
-                        for (const s of data.stakeholders) {
-                            const clean = { ...s }; delete clean.id;
-                            await dbAdd('stakeholders', clean);
-                        }
-                    }
-                    if (data.searches) {
-                        for (const h of data.searches) {
-                            const clean = { ...h }; delete clean.id;
-                            await dbAdd('searches', clean);
-                        }
-                    }
+                    if (data.projects) for (const p of data.projects) { const c = { ...p }; delete c.id; await dbAdd('projects', c); }
+                    if (data.stakeholders) for (const s of data.stakeholders) { const c = { ...s }; delete c.id; await dbAdd('stakeholders', c); }
+                    if (data.searches) for (const h of data.searches) { const c = { ...h }; delete c.id; await dbAdd('searches', c); }
                     loaded = true;
                 }
             } catch(e) {}
 
-            // Fallback: load original seed data
             if (!loaded) {
                 try {
                     const resp = await fetch('data/projects.json');
-                    if (resp.ok) {
-                        const seedProjects = await resp.json();
-                        for (const p of seedProjects) {
-                            await dbAdd('projects', { ...p, type: 'project', category: p.type });
-                        }
-                    }
+                    if (resp.ok) { const d = await resp.json(); for (const p of d) await dbAdd('projects', { ...p, type: 'project', category: p.type }); }
                     const resp2 = await fetch('data/stakeholders.json');
-                    if (resp2.ok) {
-                        const seedStakeholders = await resp2.json();
-                        for (const s of seedStakeholders) {
-                            await dbAdd('stakeholders', { ...s, type: 'stakeholder', name: s.company, email: s.bdEmail });
-                        }
-                    }
+                    if (resp2.ok) { const d = await resp2.json(); for (const s of d) await dbAdd('stakeholders', { ...s, type: 'stakeholder', name: s.company, email: s.bdEmail }); }
                 } catch(e) {}
             }
             await updateDbCount();
         }
-    } catch(e) { /* No seed data, that's fine */ }
+    } catch(e) {}
 }
 
 init();
